@@ -171,3 +171,38 @@ def probe(path: Path) -> ProbeResult:
         width=video.get("width"),
         height=video.get("height"),
     )
+
+
+def detect_silences(
+    audio_path: Path, noise_db: float = -40.0, min_seconds: float = 0.15
+) -> list[tuple[float, float]]:
+    """Return (start, end) pauses found by FFmpeg's silencedetect filter."""
+    ffmpeg, _ = require_available()
+    result = subprocess.run(
+        [
+            ffmpeg, "-hide_banner", "-nostdin", "-i", str(audio_path),
+            "-af", f"silencedetect=n={noise_db}dB:d={min_seconds}",
+            "-f", "null", "-",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if result.returncode != 0:
+        logger.error("silencedetect failed: %s", result.stderr[-1000:])
+        raise FfmpegError("ffmpeg_failed", "Pauses in the narration could not be analysed.")
+
+    silences: list[tuple[float, float]] = []
+    start: float | None = None
+    for line in result.stderr.splitlines():
+        if "silence_start:" in line:
+            start = float(line.split("silence_start:")[1].split()[0])
+        elif "silence_end:" in line and start is not None:
+            end = float(line.split("silence_end:")[1].split()[0])
+            silences.append((max(0.0, start), end))
+            start = None
+    if start is not None:
+        # Silence that runs to the end of the file.
+        silences.append((max(0.0, start), probe(audio_path).duration_seconds))
+    return silences

@@ -33,6 +33,10 @@ TTS_TIMEOUT_SECONDS = int(os.getenv("TTS_TIMEOUT_SECONDS", "120"))
 # Longer text is split at sentence boundaries and the audio is concatenated.
 MAX_NARRATION_CHARS = int(os.getenv("MAX_NARRATION_CHARS", "5000"))
 TTS_CHUNK_CHARS = int(os.getenv("TTS_CHUNK_CHARS", "1500"))
+# Video narration: scenes are joined and voiced in as few requests as
+# possible; each request carries at most this many characters (capped at
+# MAX_NARRATION_CHARS). Slide changes are found from pauses in the audio.
+VIDEO_TTS_GROUP_CHARS = int(os.getenv("VIDEO_TTS_GROUP_CHARS", "5000"))
 
 QUIZ_TIME_PER_QUESTION_SECONDS = int(
     os.getenv("QUIZ_TIME_PER_QUESTION_SECONDS", "60")

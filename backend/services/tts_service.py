@@ -336,12 +336,14 @@ def synthesize_narration(
     *,
     destination: Path | None = None,
     wait: bool = False,
+    max_chunk_chars: int | None = None,
 ) -> NarrationAudio:
     """Convert narration text into a WAV file.
 
     By default the file goes to storage/audio/<uuid>.wav and the call fails
     fast if another narration is running. The video pipeline passes its own
-    ``destination`` and ``wait=True`` so scenes queue behind the lock.
+    ``destination`` and ``wait=True`` so scenes queue behind the lock, and
+    raises ``max_chunk_chars`` so a whole lesson is voiced in one request.
     """
     provider = get_provider()
 
@@ -379,7 +381,7 @@ def synthesize_narration(
         )
 
     try:
-        chunks = split_narration(cleaned)
+        chunks = split_narration(cleaned, max_chunk_chars or TTS_CHUNK_CHARS)
         clips = [provider.synthesize(chunk, matched) for chunk in chunks]
 
         if destination is None:

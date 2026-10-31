@@ -3,7 +3,9 @@
 One job at a time, run in a background thread:
 
     1. script     – Gemini lesson script (lesson_service)
-    2. narration  – one WAV per scene (tts_service)
+    2. narration  – scenes joined and voiced in one TTS request (or a few,
+                    for long lessons); slide changes are placed on detected
+                    pauses (ffmpeg_service.detect_silences + narration_sync)
     3. slides     – one PNG per scene (slide_service)
     4. assembling – single narration track + timed slides -> MP4 (ffmpeg_service)
 
@@ -23,7 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from config import VIDEO_DIR, VIDEO_WORK_DIR
+from config import MAX_NARRATION_CHARS, VIDEO_DIR, VIDEO_TTS_GROUP_CHARS, VIDEO_WORK_DIR
 from database import (
     DocumentRecord,
     create_video,
@@ -32,7 +34,7 @@ from database import (
     update_video,
 )
 from schemas import LessonScript
-from services import ffmpeg_service, slide_service, tts_service
+from services import ffmpeg_service, narration_sync, slide_service, tts_service
 from services.ffmpeg_service import FfmpegError
 from services.gemini_service import GeminiServiceError
 from services.gemini_service import is_configured as gemini_is_configured
@@ -43,8 +45,11 @@ from services.tts_service import TtsServiceError
 
 logger = logging.getLogger(__name__)
 
-SCENE_GAP_SECONDS = 0.7
+# Silence inserted between separately voiced groups of scenes, and after the
+# last scene so the final slide does not cut off abruptly.
+GROUP_GAP_SECONDS = 0.7
 FINAL_TAIL_SECONDS = 1.2
+MIN_SCENE_SECONDS = 1.0
 
 _start_lock = threading.Lock()
 
@@ -185,6 +190,64 @@ def _read_wav(path: Path) -> tuple[bytes, int, int, int]:
         )
 
 
+def _scene_text(narration: str) -> str:
+    return " ".join(narration.split())
+
+
+def _group_scenes(narrations: list[str], limit: int) -> list[list[int]]:
+    """Pack consecutive scenes into groups whose joined text fits ``limit``.
+    Usually the whole lesson fits in one group (one TTS request)."""
+    groups: list[list[int]] = []
+    current: list[int] = []
+    length = 0
+    for index, text in enumerate(narrations):
+        added = len(text) + (1 if current else 0)
+        if current and length + added > limit:
+            groups.append(current)
+            current, length = [], 0
+            added = len(text)
+        current.append(index)
+        length += added
+    if current:
+        groups.append(current)
+    return groups
+
+
+def _scene_spans(scene_lengths: list[int], audio_path: Path, total: float) -> list[float]:
+    """Duration of each scene within one continuous narration clip.
+
+    Boundaries come from narration_sync (proportional estimate snapped to
+    detected pauses). If they are unusable (out of order or too close), fall
+    back to the proportional estimate."""
+    if len(scene_lengths) == 1:
+        return [total]
+
+    silences = [
+        narration_sync.Silence(start, end)
+        for start, end in ffmpeg_service.detect_silences(audio_path)
+    ]
+    boundaries = narration_sync.align_boundaries(scene_lengths, silences, total)
+    times = [b.time for b in boundaries]
+    snapped = sum(b.snapped for b in boundaries)
+
+    def valid(points: list[float]) -> bool:
+        edges = [0.0, *points, total]
+        return all(b - a >= MIN_SCENE_SECONDS for a, b in zip(edges, edges[1:]))
+
+    if not valid(times):
+        start, end = narration_sync.speech_span(silences, total)
+        times = narration_sync.expected_boundaries(scene_lengths, start, end)
+        snapped = 0
+        if not valid(times):
+            times = narration_sync.expected_boundaries(scene_lengths, 0.0, total)
+    logger.info(
+        "Aligned %d scene boundaries (%d on detected pauses)", len(times), snapped
+    )
+
+    edges = [0.0, *times, total]
+    return [b - a for a, b in zip(edges, edges[1:])]
+
+
 def _format_timestamp(seconds: float) -> str:
     millis = int(round(seconds * 1000))
     hours, millis = divmod(millis, 3_600_000)
@@ -244,15 +307,38 @@ def _run_job(video_id: str, document: DocumentRecord, options: VideoOptions) -> 
             script_json=script.model_dump_json(),
         )
 
-        # 2. Narration (15% -> 70%)
-        scene_audio: list[Path] = []
-        for index, scene in enumerate(script.scenes):
-            destination = work_dir / f"scene-{index:02d}.wav"
+        # 2. Narration (15% -> 70%): one TTS request per group of scenes;
+        #    normally a single group covers the whole lesson.
+        narrations = [_scene_text(scene.narration) for scene in script.scenes]
+        groups = _group_scenes(
+            narrations, max(1, min(VIDEO_TTS_GROUP_CHARS, MAX_NARRATION_CHARS))
+        )
+        logger.info(
+            "Video %s: %d scenes voiced in %d TTS request(s)", video_id, total, len(groups)
+        )
+        _progress(video_id, "narration", 20)
+        group_audio: list[Path] = []
+        for group_index, group in enumerate(groups):
+            destination = work_dir / f"narration-{group_index:02d}.wav"
+            text = " ".join(narrations[i] for i in group)
             tts_service.synthesize_narration(
-                scene.narration, options.voice, destination=destination, wait=True
+                text,
+                options.voice,
+                destination=destination,
+                wait=True,
+                max_chunk_chars=len(text),
             )
-            scene_audio.append(destination)
-            _progress(video_id, "narration", 15 + int(55 * (index + 1) / total))
+            group_audio.append(destination)
+            _progress(video_id, "narration", 20 + int(45 * (group_index + 1) / len(groups)))
+
+        # Find where each scene starts inside its group's narration.
+        group_spans: list[list[float]] = []
+        for group, audio_path in zip(groups, group_audio):
+            group_total = ffmpeg_service.probe(audio_path).duration_seconds
+            group_spans.append(
+                _scene_spans([len(narrations[i]) for i in group], audio_path, group_total)
+            )
+        _progress(video_id, "narration", 70)
 
         # 3. Slides (70% -> 80%)
         _progress(video_id, "slides", 72)
@@ -281,23 +367,31 @@ def _run_job(video_id: str, document: DocumentRecord, options: VideoOptions) -> 
         timings: list[tuple[float, float]] = []
         audio_format: tuple[int, int, int] | None = None
         elapsed = 0.0
-        for index, (audio_path, slide_path) in enumerate(zip(scene_audio, slide_paths)):
+        for group_index, (group, audio_path, spans) in enumerate(
+            zip(groups, group_audio, group_spans)
+        ):
             pcm, rate, channels, width = _read_wav(audio_path)
             if audio_format is None:
                 audio_format = (rate, channels, width)
             elif audio_format != (rate, channels, width):
                 raise VideoServiceError(
-                    "audio_mismatch", "Scene narrations have different audio formats.", 500
+                    "audio_mismatch", "Narration parts have different audio formats.", 500
                 )
             frame_bytes = channels * width
-            gap = FINAL_TAIL_SECONDS if index == total - 1 else SCENE_GAP_SECONDS
+            last_group = group_index == len(groups) - 1
+            gap = FINAL_TAIL_SECONDS if last_group else GROUP_GAP_SECONDS
             silence = b"\x00" * (int(rate * gap) * frame_bytes)
-            speech_seconds = len(pcm) / (rate * frame_bytes)
-            scene_seconds = (len(pcm) + len(silence)) / (rate * frame_bytes)
             pcm_parts.append(pcm + silence)
-            slides.append((slide_path, scene_seconds))
-            timings.append((elapsed, speech_seconds))
-            elapsed += scene_seconds
+
+            # Scale spans so they sum exactly to this part's sample count.
+            part_seconds = len(pcm) / (rate * frame_bytes)
+            scale = part_seconds / (sum(spans) or 1)
+            for position, (scene_index, span) in enumerate(zip(group, spans)):
+                speech_seconds = span * scale
+                slide_seconds = speech_seconds + (gap if position == len(group) - 1 else 0.0)
+                slides.append((slide_paths[scene_index], slide_seconds))
+                timings.append((elapsed, speech_seconds))
+                elapsed += slide_seconds
 
         assert audio_format is not None
         narration_path = work_dir / "narration.wav"

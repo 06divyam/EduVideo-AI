@@ -1,5 +1,6 @@
 import logging
 import uuid
+import wave
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -7,12 +8,15 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 
 from config import (
     EXTRACTED_DIR,
     GEMINI_MODEL,
+    GEMINI_TTS_MODEL,
     QUIZ_TIME_PER_QUESTION_SECONDS,
+    TTS_PROVIDER,
     UPLOAD_DIR,
     cors_origins,
     ensure_directories,
@@ -20,14 +24,17 @@ from config import (
 from database import (
     AttemptRecord,
     DocumentRecord,
+    NarrationRecord,
     QuizRecord,
     create_attempt,
     create_document,
+    create_narration,
     create_quiz,
     create_study_notes,
     get_attempt,
     get_document,
     get_latest_study_notes,
+    get_narration,
     get_quiz,
     init_db,
     list_attempts,
@@ -44,6 +51,8 @@ from schemas import (
     ExtractTextRequest,
     ExtractTextResponse,
     HealthResponse,
+    NarrationRequest,
+    NarrationResponse,
     ProgressResponse,
     QuestionResult,
     QuizGenerationRequest,
@@ -64,6 +73,12 @@ from services.gemini_service import (
     generate_study_notes,
     is_configured,
 )
+from services.tts_service import (
+    TtsServiceError,
+    resolve_audio_path,
+    synthesize_narration,
+)
+from services.tts_service import is_configured as tts_is_configured
 from services.pdf_service import (
     PdfServiceError,
     extract_text,
@@ -110,6 +125,49 @@ def gemini_http_error(exc: GeminiServiceError) -> HTTPException:
     return HTTPException(
         status_code=exc.status_code,
         detail={"code": exc.code, "message": exc.message},
+    )
+
+
+def tts_http_error(exc: TtsServiceError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": exc.message},
+    )
+
+
+def narration_not_found() -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail={
+            "code": "narration_not_found",
+            "message": "No narration matches that id.",
+        },
+    )
+
+
+def narration_response(
+    record: NarrationRecord, chunk_count: int | None = None
+) -> NarrationResponse:
+    with wave.open(record.stored_path, "rb") as audio:
+        sample_rate = audio.getframerate()
+        channels = audio.getnchannels()
+        sample_width_bits = audio.getsampwidth() * 8
+
+    return NarrationResponse(
+        narration_id=record.id,
+        document_id=record.document_id,
+        audio_url=f"/api/narrations/{record.id}/audio",
+        sample_rate=sample_rate,
+        channels=channels,
+        sample_width_bits=sample_width_bits,
+        duration_seconds=record.duration_seconds,
+        size_bytes=record.size_bytes,
+        provider=record.provider,
+        model=record.model,
+        voice=record.voice,
+        text_length=record.text_length,
+        chunk_count=chunk_count,
+        created_at=record.created_at,
     )
 
 
@@ -208,6 +266,9 @@ def health() -> HealthResponse:
         service="eduvideo-api",
         gemini_configured=is_configured(),
         gemini_model=GEMINI_MODEL,
+        tts_configured=tts_is_configured(),
+        tts_provider=TTS_PROVIDER,
+        tts_model=GEMINI_TTS_MODEL,
     )
 
 
@@ -642,4 +703,89 @@ def progress() -> ProgressResponse:
             TopicPerformance(**topic.model_dump()) for topic in topic_list(topics)
         ],
         recent_activity=activity[:8],
+    )
+
+
+@app.post("/api/narrations", response_model=NarrationResponse)
+async def generate_narration(payload: NarrationRequest) -> NarrationResponse:
+    if payload.document_id is not None:
+        get_document_or_404(payload.document_id)
+
+    try:
+        audio = await run_in_threadpool(
+            synthesize_narration, payload.text, payload.voice
+        )
+    except TtsServiceError as exc:
+        raise tts_http_error(exc) from exc
+
+    record = NarrationRecord(
+        id=audio.audio_id,
+        document_id=payload.document_id,
+        provider=audio.provider,
+        model=audio.model,
+        voice=audio.voice,
+        text_length=audio.text_length,
+        duration_seconds=audio.duration_seconds,
+        size_bytes=audio.size_bytes,
+        stored_path=str(audio.path),
+        created_at=now_iso(),
+    )
+
+    try:
+        await run_in_threadpool(create_narration, record)
+    except Exception as exc:
+        audio.path.unlink(missing_ok=True)
+        logger.exception("Failed to save narration metadata")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "storage_error",
+                "message": "The narration could not be saved. Please try again.",
+            },
+        ) from exc
+
+    return narration_response(record, chunk_count=audio.chunk_count)
+
+
+@app.get("/api/narrations/{narration_id}", response_model=NarrationResponse)
+def narration_detail(narration_id: str) -> NarrationResponse:
+    record = get_narration(narration_id)
+    if record is None:
+        raise narration_not_found()
+
+    if resolve_audio_path(record.stored_path) is None:
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "code": "narration_audio_missing",
+                "message": "The audio file for this narration is missing. Generate it again.",
+            },
+        )
+
+    return narration_response(record)
+
+
+@app.get("/api/narrations/{narration_id}/audio")
+def narration_audio(narration_id: str) -> FileResponse:
+    # Only files recorded in the database and located inside storage/audio
+    # are served; the client never supplies a path.
+    record = get_narration(narration_id)
+    if record is None:
+        raise narration_not_found()
+
+    path = resolve_audio_path(record.stored_path)
+    if path is None:
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "code": "narration_audio_missing",
+                "message": "The audio file for this narration is missing. Generate it again.",
+            },
+        )
+
+    return FileResponse(
+        path,
+        media_type="audio/wav",
+        filename=f"narration-{record.id}.wav",
+        content_disposition_type="inline",
     )

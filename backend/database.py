@@ -55,6 +55,19 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
 
 CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz
     ON quiz_attempts(quiz_id, completed_at DESC);
+
+CREATE TABLE IF NOT EXISTS narrations (
+    id TEXT PRIMARY KEY,
+    document_id TEXT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    voice TEXT NOT NULL,
+    text_length INTEGER NOT NULL,
+    duration_seconds REAL NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    stored_path TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -422,3 +435,68 @@ def list_attempts(
         )
         for row in rows
     ]
+
+
+@dataclass(frozen=True)
+class NarrationRecord:
+    id: str
+    document_id: str | None
+    provider: str
+    model: str
+    voice: str
+    text_length: int
+    duration_seconds: float
+    size_bytes: int
+    stored_path: str
+    created_at: str
+
+
+def _narration_from_row(row: sqlite3.Row) -> NarrationRecord:
+    return NarrationRecord(
+        id=row["id"],
+        document_id=row["document_id"],
+        provider=row["provider"],
+        model=row["model"],
+        voice=row["voice"],
+        text_length=row["text_length"],
+        duration_seconds=row["duration_seconds"],
+        size_bytes=row["size_bytes"],
+        stored_path=row["stored_path"],
+        created_at=row["created_at"],
+    )
+
+
+def create_narration(record: NarrationRecord, db_path: Path = DATABASE_PATH) -> None:
+    with get_connection(db_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO narrations (
+                id, document_id, provider, model, voice, text_length,
+                duration_seconds, size_bytes, stored_path, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record.id,
+                record.document_id,
+                record.provider,
+                record.model,
+                record.voice,
+                record.text_length,
+                record.duration_seconds,
+                record.size_bytes,
+                record.stored_path,
+                record.created_at,
+            ),
+        )
+
+
+def get_narration(
+    narration_id: str, db_path: Path = DATABASE_PATH
+) -> NarrationRecord | None:
+    with get_connection(db_path) as connection:
+        row = connection.execute(
+            "SELECT * FROM narrations WHERE id = ?",
+            (narration_id,),
+        ).fetchone()
+
+    return _narration_from_row(row) if row is not None else None

@@ -23,7 +23,8 @@ def is_configured() -> bool:
     return bool(GEMINI_API_KEY)
 
 
-def _get_client() -> genai.Client:
+def get_client() -> genai.Client:
+    """Shared Gemini client. The API key never leaves the backend."""
     global _client
 
     if not GEMINI_API_KEY:
@@ -46,8 +47,39 @@ def _source_text(text: str) -> str:
     return cleaned
 
 
+def map_gemini_exception(exc: Exception) -> GeminiServiceError:
+    """Translate an SDK/HTTP failure into a user-safe GeminiServiceError."""
+    message = str(exc).lower()
+
+    if "api key" in message or "unauthenticated" in message or "permission" in message:
+        return GeminiServiceError(
+            "gemini_auth_error",
+            "Gemini rejected the backend API key. Check GEMINI_API_KEY in backend/.env.",
+            status_code=502,
+        )
+
+    if "quota" in message or "rate limit" in message or "429" in message:
+        return GeminiServiceError(
+            "gemini_rate_limited",
+            "Gemini rate limit reached. Wait a moment and try again.",
+            status_code=429,
+        )
+
+    if "timed out" in message or "timeout" in message:
+        return GeminiServiceError(
+            "gemini_timeout",
+            "Gemini took too long to respond. Please try again.",
+            status_code=504,
+        )
+
+    return GeminiServiceError(
+        "gemini_error",
+        "Gemini could not generate a response. Please try again.",
+    )
+
+
 def _generate_structured(prompt: str, schema: type) -> object:
-    client = _get_client()
+    client = get_client()
 
     try:
         response = client.models.generate_content(
@@ -61,26 +93,7 @@ def _generate_structured(prompt: str, schema: type) -> object:
         )
     except Exception as exc:
         logger.exception("Gemini request failed")
-        message = str(exc).lower()
-
-        if "api key" in message or "unauthenticated" in message or "permission" in message:
-            raise GeminiServiceError(
-                "gemini_auth_error",
-                "Gemini rejected the backend API key. Check GEMINI_API_KEY in backend/.env.",
-                status_code=502,
-            ) from exc
-
-        if "quota" in message or "rate limit" in message or "429" in message:
-            raise GeminiServiceError(
-                "gemini_rate_limited",
-                "Gemini rate limit reached. Wait a moment and try again.",
-                status_code=429,
-            ) from exc
-
-        raise GeminiServiceError(
-            "gemini_error",
-            "Gemini could not generate a response. Please try again.",
-        ) from exc
+        raise map_gemini_exception(exc) from exc
 
     if not response.text:
         raise GeminiServiceError(

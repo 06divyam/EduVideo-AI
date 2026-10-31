@@ -11,6 +11,9 @@ class HealthResponse(BaseModel):
     service: str
     gemini_configured: bool
     gemini_model: str
+    tts_configured: bool
+    tts_provider: str
+    tts_model: str
 
 
 class UploadPdfResponse(BaseModel):
@@ -196,3 +199,28 @@ class ProgressResponse(BaseModel):
     weak_topics: list[WeakTopic]
     topic_performance: list[TopicPerformance]
     recent_activity: list[ActivityItem]
+
+
+class NarrationRequest(BaseModel):
+    text: str
+    voice: str | None = None
+    document_id: str | None = None
+
+
+class NarrationResponse(BaseModel):
+    narration_id: str
+    document_id: str | None
+    audio_url: str
+    format: Literal["wav"] = "wav"
+    mime_type: Literal["audio/wav"] = "audio/wav"
+    sample_rate: int
+    channels: int
+    sample_width_bits: int
+    duration_seconds: float
+    size_bytes: int
+    provider: str
+    model: str
+    voice: str
+    text_length: int
+    chunk_count: int | None = None
+    created_at: str

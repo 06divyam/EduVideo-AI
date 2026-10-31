@@ -10,5 +10,7 @@ data/*.db-*
 
 storage/uploads/*
 storage/extracted/*
+storage/audio/*
 !storage/uploads/.gitkeep
 !storage/extracted/.gitkeep
+!storage/audio/.gitkeep

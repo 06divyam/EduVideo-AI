@@ -110,16 +110,26 @@ def start_video_job(document: DocumentRecord, options: VideoOptions) -> str:
 
     try:
         provider = tts_service.get_provider()
+        if not provider.is_configured():
+            raise TtsServiceError(
+                "tts_not_configured",
+                f"Text-to-speech ({provider.name}) is not configured on the backend. Add "
+                f"{'MURF_API_KEY' if provider.name == 'murf' else 'GEMINI_API_KEY'} "
+                "to backend/.env.",
+                503,
+            )
+        # No voice requested: use the provider's default for the lesson language.
+        requested = options.voice.strip() or provider.voice_for_language(options.language)
+        voice = next(
+            (name for name in provider.voices if name.lower() == requested.lower()),
+            None,
+        )
     except TtsServiceError as exc:
         raise VideoServiceError(exc.code, exc.message, exc.status_code) from exc
-    voice = next(
-        (name for name in provider.voices if name.lower() == options.voice.strip().lower()),
-        None,
-    )
     if voice is None:
         raise VideoServiceError(
             "invalid_voice",
-            f"Unknown voice '{options.voice}'. Choose one of: {', '.join(sorted(provider.voices))}.",
+            f"Unknown voice '{requested}'. Choose one of: {', '.join(sorted(provider.voices))}.",
             status_code=422,
         )
     options = VideoOptions(
@@ -235,7 +245,7 @@ def _scene_spans(scene_lengths: list[int], audio_path: Path, total: float) -> li
         return all(b - a >= MIN_SCENE_SECONDS for a, b in zip(edges, edges[1:]))
 
     if not valid(times):
-        start, end = narration_sync.speech_span(silences, total)
+        start, end = narration_sync.speech_span(narration_sync.merge_adjacent(silences), total)
         times = narration_sync.expected_boundaries(scene_lengths, start, end)
         snapped = 0
         if not valid(times):
@@ -310,9 +320,12 @@ def _run_job(video_id: str, document: DocumentRecord, options: VideoOptions) -> 
         # 2. Narration (15% -> 70%): one TTS request per group of scenes;
         #    normally a single group covers the whole lesson.
         narrations = [_scene_text(scene.narration) for scene in script.scenes]
-        groups = _group_scenes(
-            narrations, max(1, min(VIDEO_TTS_GROUP_CHARS, MAX_NARRATION_CHARS))
+        limit = min(
+            VIDEO_TTS_GROUP_CHARS,
+            MAX_NARRATION_CHARS,
+            tts_service.get_provider().max_request_chars,
         )
+        groups = _group_scenes(narrations, max(1, limit))
         logger.info(
             "Video %s: %d scenes voiced in %d TTS request(s)", video_id, total, len(groups)
         )

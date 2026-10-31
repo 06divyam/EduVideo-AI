@@ -2,13 +2,18 @@
 
 The service is provider-agnostic: callers use ``synthesize_narration`` and
 receive a WAV file on disk. Providers only turn a chunk of text into PCM
-audio, so swapping Gemini for another engine means adding one class that
-implements ``TtsProvider`` and selecting it with the ``TTS_PROVIDER`` env var.
+audio. ``TTS_PROVIDER`` selects the engine:
 
-Gemini TTS returns 24 kHz, mono, 16-bit PCM (a WAV with a RIFF header for
-unary requests). Raw ``audio/L16`` PCM is also accepted defensively.
+- ``murf`` (default): Murf ``/v1/speech/generate``, requested as 24 kHz mono
+  WAV returned inline as Base64.
+- ``gemini``: Gemini TTS, which returns 24 kHz, mono, 16-bit PCM (a WAV with
+  a RIFF header for unary requests). Raw ``audio/L16`` PCM is also accepted.
+
+Both produce the same ``AudioClip`` format, so the video pipeline (silence
+detection, slide alignment, FFmpeg assembly) does not depend on the provider.
 """
 
+import base64
 import io
 import logging
 import os
@@ -22,6 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+import httpx
 from google.genai import types
 
 from config import (
@@ -29,6 +35,12 @@ from config import (
     GEMINI_TTS_MODEL,
     GEMINI_TTS_VOICE,
     MAX_NARRATION_CHARS,
+    MURF_API_BASE_URL,
+    MURF_API_KEY,
+    MURF_MAX_REQUEST_CHARS,
+    MURF_SAMPLE_RATE,
+    MURF_STYLE,
+    MURF_VOICE_ID,
     TTS_CHUNK_CHARS,
     TTS_PROVIDER,
     TTS_TIMEOUT_SECONDS,
@@ -91,8 +103,11 @@ class TtsProvider(Protocol):
     model: str
     default_voice: str
     voices: frozenset[str]
+    max_request_chars: int  # most characters one synthesize() call accepts
 
     def is_configured(self) -> bool: ...
+
+    def voice_for_language(self, language: str) -> str: ...
 
     def synthesize(self, text: str, voice: str) -> AudioClip: ...
 
@@ -113,6 +128,7 @@ GEMINI_VOICES = frozenset(
 class GeminiTtsProvider:
     name = "gemini"
     voices = GEMINI_VOICES
+    max_request_chars = MAX_NARRATION_CHARS
 
     def __init__(self, model: str, default_voice: str) -> None:
         self.model = model
@@ -120,6 +136,10 @@ class GeminiTtsProvider:
 
     def is_configured(self) -> bool:
         return gemini_is_configured()
+
+    def voice_for_language(self, language: str) -> str:
+        # Gemini voices are multilingual; the language follows the text.
+        return self.default_voice
 
     def synthesize(self, text: str, voice: str) -> AudioClip:
         try:
@@ -177,6 +197,229 @@ class GeminiTtsProvider:
         return _decode_audio(blob.data, blob.mime_type or "")
 
 
+# Default Murf voice per lesson language (voice IDs checked against
+# GET /v1/speech/voices on 2026-10-31). English uses MURF_VOICE_ID. Murf has
+# no Arabic voice, so Arabic narration is rejected with a clear error.
+MURF_LANGUAGE_VOICES = {
+    "Spanish": "es-ES-carla",
+    "French": "fr-FR-louise",
+    "Hindi": "hi-IN-shweta",
+    "Portuguese": "pt-BR-isadora",
+}
+MURF_RETRY_DELAYS_SECONDS = (2.0, 5.0)
+
+_murf_voice_cache: frozenset[str] | None = None
+_murf_voice_lock = threading.Lock()
+
+
+class MurfTtsProvider:
+    name = "murf"
+    model = "murf-gen2"
+    max_request_chars = MURF_MAX_REQUEST_CHARS
+
+    def __init__(
+        self,
+        api_key: str,
+        default_voice: str,
+        *,
+        style: str = "",
+        sample_rate: int = MURF_SAMPLE_RATE,
+        base_url: str = MURF_API_BASE_URL,
+        transport: httpx.BaseTransport | None = None,
+        retry_delays: tuple[float, ...] = MURF_RETRY_DELAYS_SECONDS,
+    ) -> None:
+        self._api_key = api_key
+        self.default_voice = default_voice
+        self.style = style
+        self.sample_rate = sample_rate
+        self.base_url = base_url
+        self._transport = transport
+        self._retry_delays = retry_delays
+
+    def is_configured(self) -> bool:
+        return bool(self._api_key)
+
+    def voice_for_language(self, language: str) -> str:
+        if language == "English":
+            return self.default_voice
+        voice = MURF_LANGUAGE_VOICES.get(language)
+        if voice is None:
+            raise TtsServiceError(
+                "tts_language_unsupported",
+                f"Murf has no {language} voice. Choose another lesson language, "
+                "or set TTS_PROVIDER=gemini in backend/.env.",
+                status_code=422,
+            )
+        return voice
+
+    def _client(self) -> httpx.Client:
+        return httpx.Client(
+            base_url=self.base_url,
+            headers={"api-key": self._api_key, "Accept": "application/json"},
+            timeout=TTS_TIMEOUT_SECONDS,
+            transport=self._transport,
+        )
+
+    @property
+    def voices(self) -> frozenset[str]:
+        """Voice IDs available to this key, fetched once and cached."""
+        global _murf_voice_cache
+        with _murf_voice_lock:
+            if _murf_voice_cache is None:
+                response = self._request("GET", "/v1/speech/voices")
+                try:
+                    _murf_voice_cache = frozenset(
+                        item["voiceId"] for item in response.json() if item.get("voiceId")
+                    )
+                except (ValueError, TypeError, KeyError) as exc:
+                    raise TtsServiceError(
+                        "tts_invalid_response",
+                        "Murf returned an unreadable voice list. Please try again.",
+                    ) from exc
+            return _murf_voice_cache
+
+    def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
+        if not self._api_key:
+            raise TtsServiceError(
+                "tts_not_configured",
+                "Murf text-to-speech is not configured. Add MURF_API_KEY to backend/.env.",
+                status_code=503,
+            )
+        attempts = len(self._retry_delays) + 1
+        with self._client() as client:
+            for attempt in range(attempts):
+                try:
+                    response = client.request(method, path, **kwargs)
+                except httpx.TimeoutException as exc:
+                    raise TtsServiceError(
+                        "tts_timeout",
+                        f"Murf did not respond within {TTS_TIMEOUT_SECONDS} seconds. "
+                        "Please try again.",
+                        status_code=504,
+                    ) from exc
+                except httpx.HTTPError as exc:
+                    logger.warning("Murf request failed: %s", type(exc).__name__)
+                    raise TtsServiceError(
+                        "tts_unavailable",
+                        "Could not reach Murf. Check the network connection and try again.",
+                        status_code=503,
+                    ) from exc
+
+                retryable = response.status_code == 429 or response.status_code >= 500
+                if retryable and attempt < attempts - 1:
+                    delay = self._retry_delays[attempt]
+                    logger.warning(
+                        "Murf returned %s; retrying in %.0fs", response.status_code, delay
+                    )
+                    time.sleep(delay)
+                    continue
+                if response.status_code >= 400:
+                    raise _murf_error(response)
+                return response
+        raise AssertionError("unreachable")
+
+    def synthesize(self, text: str, voice: str) -> AudioClip:
+        payload: dict[str, object] = {
+            "text": text,
+            "voiceId": voice,
+            "format": "WAV",
+            "sampleRate": self.sample_rate,
+            "channelType": "MONO",
+            "modelVersion": "GEN2",
+            "encodeAsBase64": True,
+        }
+        if self.style:
+            payload["style"] = self.style
+
+        response = self._request("POST", "/v1/speech/generate", json=payload)
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise TtsServiceError(
+                "tts_invalid_response", "Murf returned an unreadable response."
+            ) from exc
+
+        if body.get("warning"):
+            logger.warning("Murf warning: %s", body["warning"])
+        if body.get("remainingCharacterCount") is not None:
+            logger.info(
+                "Murf: %s characters remaining in this billing cycle",
+                body["remainingCharacterCount"],
+            )
+
+        encoded = body.get("encodedAudio")
+        if encoded:
+            try:
+                data = base64.b64decode(encoded, validate=True)
+            except (ValueError, TypeError) as exc:
+                raise TtsServiceError(
+                    "tts_invalid_audio", "Murf returned audio that could not be decoded."
+                ) from exc
+        elif body.get("audioFile"):
+            # Fallback if Base64 was not honoured: download the hosted file.
+            try:
+                with httpx.Client(timeout=TTS_TIMEOUT_SECONDS, transport=self._transport) as c:
+                    download = c.get(body["audioFile"])
+                    download.raise_for_status()
+                    data = download.content
+            except httpx.HTTPError as exc:
+                raise TtsServiceError(
+                    "tts_unavailable", "The Murf audio file could not be downloaded."
+                ) from exc
+        else:
+            raise TtsServiceError(
+                "tts_empty_audio",
+                "Murf returned no audio for this narration. Please try again.",
+            )
+
+        return _decode_audio(data, "audio/wav")
+
+
+def _murf_error(response: httpx.Response) -> TtsServiceError:
+    """Map a Murf error response to a user-facing TtsServiceError."""
+    detail = ""
+    try:
+        body = response.json()
+        if isinstance(body, dict):
+            detail = str(body.get("errorMessage") or body.get("message") or body.get("error") or "")
+    except ValueError:
+        pass
+    detail = detail.strip()[:300]
+    status = response.status_code
+    logger.warning("Murf error %s: %s", status, detail or "(no message)")
+
+    if status in (401, 403):
+        return TtsServiceError(
+            "tts_auth_failed",
+            "Murf rejected the API key. Check MURF_API_KEY in backend/.env.",
+            status_code=503,
+        )
+    if status == 402:
+        return TtsServiceError(
+            "tts_quota_exceeded",
+            "The Murf account has no characters or credits left. Top up the plan or "
+            "try again next billing cycle.",
+            status_code=402,
+        )
+    if status == 429:
+        return TtsServiceError(
+            "tts_rate_limited",
+            "Murf is rate limiting requests. Wait a moment and try again.",
+            status_code=429,
+        )
+    if status == 400:
+        return TtsServiceError(
+            "tts_bad_request",
+            f"Murf rejected the narration request{': ' + detail if detail else '.'}",
+            status_code=502,
+        )
+    return TtsServiceError(
+        "tts_unavailable",
+        f"Murf is unavailable right now (HTTP {status}). Please try again.",
+        status_code=503,
+    )
+
+
 def _first_audio_blob(response: object) -> types.Blob | None:
     for candidate in getattr(response, "candidates", None) or []:
         content = getattr(candidate, "content", None)
@@ -217,12 +460,15 @@ def _decode_audio(data: bytes, mime_type: str) -> AudioClip:
 
 
 def get_provider() -> TtsProvider:
+    if TTS_PROVIDER == "murf":
+        return MurfTtsProvider(MURF_API_KEY, MURF_VOICE_ID, style=MURF_STYLE)
     if TTS_PROVIDER == "gemini":
         return GeminiTtsProvider(GEMINI_TTS_MODEL, GEMINI_TTS_VOICE)
 
     raise TtsServiceError(
         "tts_not_configured",
-        f"Unknown TTS_PROVIDER '{TTS_PROVIDER}'. Set TTS_PROVIDER=gemini in backend/.env.",
+        f"Unknown TTS_PROVIDER '{TTS_PROVIDER}'. Set TTS_PROVIDER to murf or gemini "
+        "in backend/.env.",
         status_code=503,
     )
 
@@ -350,7 +596,8 @@ def synthesize_narration(
     if not provider.is_configured():
         raise TtsServiceError(
             "tts_not_configured",
-            "Text-to-speech is not configured on the backend. Add GEMINI_API_KEY to backend/.env.",
+            "Text-to-speech is not configured on the backend. Add "
+            f"{'MURF_API_KEY' if provider.name == 'murf' else 'GEMINI_API_KEY'} to backend/.env.",
             status_code=503,
         )
 
@@ -381,7 +628,8 @@ def synthesize_narration(
         )
 
     try:
-        chunks = split_narration(cleaned, max_chunk_chars or TTS_CHUNK_CHARS)
+        limit = min(max_chunk_chars or TTS_CHUNK_CHARS, provider.max_request_chars)
+        chunks = split_narration(cleaned, limit)
         clips = [provider.synthesize(chunk, matched) for chunk in chunks]
 
         if destination is None:

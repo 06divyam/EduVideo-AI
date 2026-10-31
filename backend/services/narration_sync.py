@@ -21,6 +21,10 @@ from dataclasses import dataclass
 LONG_PAUSE_WEIGHT = 2.5
 MAX_PAUSE_CREDIT_SECONDS = 1.2
 EDGE_TOLERANCE_SECONDS = 0.05
+# silencedetect can report one pause as several back-to-back intervals
+# (e.g. 72.91-73.29 and 73.29-73.49). Gaps this small are merged so the pause
+# is scored by its real length.
+MERGE_GAP_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -43,6 +47,16 @@ class Boundary:
     expected: float      # proportional estimate before snapping
     snapped: bool        # True if placed inside a detected pause
     pause_seconds: float  # length of the pause used (0 if not snapped)
+
+
+def merge_adjacent(silences: list[Silence], max_gap: float = MERGE_GAP_SECONDS) -> list[Silence]:
+    merged: list[Silence] = []
+    for silence in sorted(silences, key=lambda s: s.start):
+        if merged and silence.start - merged[-1].end <= max_gap:
+            merged[-1] = Silence(merged[-1].start, max(merged[-1].end, silence.end))
+        else:
+            merged.append(silence)
+    return merged
 
 
 def speech_span(silences: list[Silence], total: float) -> tuple[float, float]:
@@ -74,6 +88,7 @@ def align_boundaries(
     if needed <= 0:
         return []
 
+    silences = merge_adjacent(silences)
     start, end = speech_span(silences, total)
     expected = expected_boundaries(scene_lengths, start, end)
     pauses = [s for s in silences if s.start > start and s.end < end]

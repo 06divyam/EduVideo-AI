@@ -23,7 +23,7 @@ export default function CreateVideoPage() {
       <p className="flex items-center gap-2 pb-2 text-xs text-slate-400">
         <PlusCircleIcon className="h-4 w-4" />
         Education track only. Videos are generated from your PDF with Gemini,
-        Gemini TTS, Pillow, and FFmpeg.
+        Murf TTS, Pillow, and FFmpeg.
       </p>
     </div>
   );

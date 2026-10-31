@@ -90,14 +90,16 @@ export default function SettingsPage() {
       icon: QuizIcon,
     },
     {
-      name: "Gemini TTS",
+      name: "Text-to-speech",
       detail: pending
         ? "Checking…"
         : unreachable
           ? "Backend unreachable"
           : ttsReady
-            ? `${health?.tts_model ?? "Gemini TTS"} ready`
-            : "GEMINI_API_KEY missing",
+            ? `${health?.tts_provider === "murf" ? "Murf" : "Gemini"} (${health?.tts_model ?? "TTS"}) ready`
+            : health?.tts_provider === "murf"
+              ? "MURF_API_KEY missing"
+              : "GEMINI_API_KEY missing",
       tone: ttsReady ? "emerald" : pending ? "slate" : "amber",
       icon: MicIcon,
     },

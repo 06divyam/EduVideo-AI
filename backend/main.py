@@ -14,8 +14,6 @@ from starlette.concurrency import run_in_threadpool
 from config import (
     EXTRACTED_DIR,
     GEMINI_MODEL,
-    GEMINI_TTS_MODEL,
-    GEMINI_TTS_VOICE,
     QUIZ_TIME_PER_QUESTION_SECONDS,
     TTS_PROVIDER,
     UPLOAD_DIR,
@@ -95,6 +93,7 @@ from services.tts_service import (
     resolve_audio_path,
     synthesize_narration,
 )
+from services.tts_service import get_provider as get_tts_provider
 from services.tts_service import is_configured as tts_is_configured
 from services.pdf_service import (
     PdfServiceError,
@@ -277,6 +276,13 @@ def build_attempt_result(attempt: AttemptRecord) -> AttemptResult:
     )
 
 
+def active_tts_model() -> str:
+    try:
+        return get_tts_provider().model
+    except TtsServiceError:
+        return "unknown"
+
+
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(
@@ -286,7 +292,7 @@ def health() -> HealthResponse:
         gemini_model=GEMINI_MODEL,
         tts_configured=tts_is_configured(),
         tts_provider=TTS_PROVIDER,
-        tts_model=GEMINI_TTS_MODEL,
+        tts_model=active_tts_model(),
         ffmpeg_available=ffmpeg_service.is_available(),
         slide_languages=sorted(
             slide_service.LATIN_LANGUAGES
@@ -900,7 +906,8 @@ def create_video_job(payload: VideoCreateRequest) -> VideoJob:
         language=payload.language,
         duration_minutes=payload.duration_minutes,
         style=payload.style,
-        voice=payload.voice or GEMINI_TTS_VOICE,
+        # Empty voice -> the active TTS provider's default for the language.
+        voice=payload.voice or "",
     )
 
     try:

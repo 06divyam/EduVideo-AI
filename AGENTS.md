@@ -43,7 +43,7 @@ python3 -m venv .venv
 .venv/bin/uvicorn main:app --reload --port 8000
 ```
 
-No test runner is configured. Verify changes with `npm run lint && npm run build` and by curling `/`, `/create`, `/videos`, `/settings` plus the backend endpoints.
+Frontend has no test runner: verify with `npm run lint && npm run build` and by curling `/`, `/create`, `/videos`, `/settings`. Backend unit tests (stdlib `unittest`, no network): `cd backend && .venv/bin/python -m unittest discover -s tests -t .`
 
 ## Frontend structure
 
@@ -77,6 +77,7 @@ No test runner is configured. Verify changes with `npm run lint && npm run build
 - macOS arm64 (Apple M4), Node 24 / npm 11, Python 3.14.3.
 - Python 3.14 works with the pinned backend deps (PyMuPDF uses a `cp310-abi3` arm64 wheel). Keep using the pinned venv (`backend/.venv`); check wheels for Pillow and Piper before adding them.
 - `ffmpeg` and `ffprobe` are **not installed**; Phase 5 needs them. Install via `brew install ffmpeg` first.
+- **TTS provider:** `TTS_PROVIDER` in `backend/.env` selects narration: `murf` (default, active; needs `MURF_API_KEY`, voice `MURF_VOICE_ID`, `MURF_STYLE=Conversational`) or `gemini` (kept, inactive). Gemini is always used for lesson scripts. Murf allows 3,000 chars/request, so 5- and 8-minute videos take 2–3 TTS requests; Murf has no Arabic voice. Gemini free tier TTS is only 10 requests/day.
 - `GEMINI_API_KEY` must live in backend env only. Never use `NEXT_PUBLIC_` for secrets and never call Gemini from the browser. Missing key should surface a clear error, not fallback content.
 
 ## Product constraints

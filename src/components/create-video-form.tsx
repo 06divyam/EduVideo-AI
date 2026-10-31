@@ -136,7 +136,7 @@ const pipeline = [
   },
   {
     title: "Narration",
-    description: "Gemini TTS voices each scene.",
+    description: "Murf TTS voices the whole lesson.",
     icon: MicIcon,
   },
   {
@@ -883,7 +883,7 @@ export function CreateVideoForm() {
               </h2>
             </div>
             <p className="mt-2 text-xs leading-relaxed text-slate-500">
-              PDF extraction, Gemini lesson scripts, Gemini TTS narration,
+              PDF extraction, Gemini lesson scripts, Murf TTS narration,
               Pillow slides, and FFmpeg rendering run on the local FastAPI
               service. A 5-minute video takes about a minute to generate.
             </p>

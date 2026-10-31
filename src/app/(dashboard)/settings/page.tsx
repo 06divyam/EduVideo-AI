@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangleIcon,
-  BookOpenIcon,
-  CheckCircleIcon,
   FileTextIcon,
   InfoIcon,
   MicIcon,
@@ -14,7 +12,7 @@ import {
 } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { SettingsForm } from "@/components/settings-form";
-import { ApiError, getHealth, type HealthResponse } from "@/lib/api";
+import { getHealth, type HealthResponse } from "@/lib/api";
 
 const toneStyles: Record<string, { dot: string; text: string }> = {
   emerald: { dot: "bg-emerald-500", text: "text-emerald-700" },
@@ -28,7 +26,6 @@ export default function SettingsPage() {
   const [healthState, setHealthState] = useState<
     "loading" | "ready" | "error"
   >("loading");
-  const [healthError, setHealthError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,13 +37,8 @@ export default function SettingsPage() {
           setHealth(result);
           setHealthState("ready");
         }
-      } catch (error) {
+      } catch {
         if (!cancelled) {
-          setHealthError(
-            error instanceof ApiError
-              ? error.message
-              : "Could not reach the backend.",
-          );
           setHealthState("error");
         }
       }

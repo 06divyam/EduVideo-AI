@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangleIcon,
   BookOpenIcon,
@@ -55,42 +55,56 @@ export function QuizHub() {
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // Bumped by the retry button to re-run the workspace requests.
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadWorkspace() {
+      try {
+        const [documentsResult, quizzesResult] = await Promise.all([
+          listDocuments(),
+          listQuizzes(),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        const loaded = documentsResult.documents;
+        // Preselect ?document=<id> when it matches, otherwise the newest PDF.
+        const requested = new URLSearchParams(window.location.search).get(
+          "document",
+        );
+        const defaultId =
+          loaded.find((document) => document.document_id === requested)
+            ?.document_id ??
+          loaded[0]?.document_id ??
+          null;
+
+        setDocuments(loaded);
+        setQuizzes(quizzesResult.quizzes);
+        setSelectedDocumentId((current) => current ?? defaultId);
+        setState("ready");
+      } catch (error) {
+        if (!cancelled) {
+          setState("error");
+          setLoadError(errorMessage(error));
+        }
+      }
+    }
+
+    void loadWorkspace();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  function retryLoad() {
     setState("loading");
     setLoadError(null);
-
-    try {
-      const [documentsResult, quizzesResult] = await Promise.all([
-        listDocuments(),
-        listQuizzes(),
-      ]);
-      setDocuments(documentsResult.documents);
-      setQuizzes(quizzesResult.quizzes);
-      setState("ready");
-    } catch (error) {
-      setState("error");
-      setLoadError(errorMessage(error));
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    if (state !== "ready" || documents.length === 0 || selectedDocumentId) {
-      return;
-    }
-
-    const requested = new URLSearchParams(window.location.search).get(
-      "document",
-    );
-    const match = documents.find(
-      (document) => document.document_id === requested,
-    );
-
-    setSelectedDocumentId(match?.document_id ?? documents[0].document_id);
-  }, [state, documents, selectedDocumentId]);
+    setReloadKey((key) => key + 1);
+  }
 
   async function handleGenerate() {
     if (!selectedDocumentId) {
@@ -138,7 +152,7 @@ export function QuizHub() {
             </p>
             <button
               type="button"
-              onClick={() => void load()}
+              onClick={retryLoad}
               className="btn-secondary mt-3 px-3 py-2 text-xs"
             >
               Try again

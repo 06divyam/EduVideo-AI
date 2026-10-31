@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ComponentType } from "react";
+import { Suspense, type ComponentType } from "react";
 import {
   BookOpenIcon,
   DashboardIcon,
@@ -31,7 +31,10 @@ const secondaryNavItems: NavItem[] = [
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
-function isActive(pathname: string, href: string) {
+function isActive(pathname: string | null, href: string) {
+  if (pathname === null) {
+    return false;
+  }
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
@@ -53,15 +56,32 @@ function Brand() {
   );
 }
 
-function NavLinks({
-  items,
-  compact = false,
-}: {
+type NavLinksProps = {
   items: NavItem[];
   compact?: boolean;
-}) {
-  const pathname = usePathname();
+};
 
+// usePathname() reads URL data, which must sit inside <Suspense> under
+// cacheComponents. The fallback renders the same links without an active
+// highlight so navigation is available in the static shell.
+function NavLinks(props: NavLinksProps) {
+  return (
+    <Suspense fallback={<NavList {...props} pathname={null} />}>
+      <ActiveNavLinks {...props} />
+    </Suspense>
+  );
+}
+
+function ActiveNavLinks(props: NavLinksProps) {
+  const pathname = usePathname();
+  return <NavList {...props} pathname={pathname} />;
+}
+
+function NavList({
+  items,
+  compact = false,
+  pathname,
+}: NavLinksProps & { pathname: string | null }) {
   return (
     <nav
       aria-label={compact ? "Mobile navigation" : "Main navigation"}

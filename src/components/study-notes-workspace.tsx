@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangleIcon,
   BookOpenIcon,
@@ -41,50 +41,92 @@ export function StudyNotesWorkspace() {
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
-  const loadDocuments = useCallback(async () => {
+  // Bumped by the retry button to re-run the documents request.
+  const [documentsReloadKey, setDocumentsReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDocuments() {
+      try {
+        const result = await listDocuments();
+        if (cancelled) {
+          return;
+        }
+        const firstId = result.documents[0]?.document_id ?? null;
+        setDocuments(result.documents);
+        setDocumentsState("ready");
+        setSelectedId((current) => current ?? firstId);
+        if (firstId) {
+          setNotesState((current) =>
+            current === "idle" ? "loading" : current,
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDocumentsState("error");
+          setDocumentsError(errorMessage(error));
+        }
+      }
+    }
+
+    void loadDocuments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [documentsReloadKey]);
+
+  function retryDocuments() {
     setDocumentsState("loading");
     setDocumentsError(null);
+    setDocumentsReloadKey((key) => key + 1);
+  }
 
-    try {
-      const result = await listDocuments();
-      setDocuments(result.documents);
-      setDocumentsState("ready");
-      setSelectedId((current) => current ?? result.documents[0]?.document_id ?? null);
-    } catch (error) {
-      setDocumentsState("error");
-      setDocumentsError(errorMessage(error));
+  function selectDocument(documentId: string) {
+    if (documentId === selectedId) {
+      return;
     }
-  }, []);
 
-  useEffect(() => {
-    void loadDocuments();
-  }, [loadDocuments]);
-
-  const loadNotes = useCallback(async (documentId: string) => {
-    setNotesState("loading");
-    setNotesError(null);
+    setSelectedId(documentId);
     setNotes(null);
+    setNotesError(null);
+    setNotesState("loading");
+  }
 
-    try {
-      const result = await getStudyNotes(documentId);
-      setNotes(result);
-      setNotesState("ready");
-    } catch (error) {
-      if (error instanceof ApiError && error.code === "study_notes_not_found") {
-        setNotesState("ready");
-        return;
-      }
-
-      setNotesError(errorMessage(error));
-      setNotesState("ready");
-    }
-  }, []);
-
+  // Fetch notes whenever the selection changes; ignore stale responses if
+  // the user switches documents before the request finishes.
   useEffect(() => {
-    if (selectedId) {
-      void loadNotes(selectedId);
+    if (!selectedId) {
+      return;
     }
-  }, [selectedId, loadNotes]);
+
+    let cancelled = false;
+
+    getStudyNotes(selectedId).then(
+      (result) => {
+        if (!cancelled) {
+          setNotes(result);
+          setNotesState("ready");
+        }
+      },
+      (error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        if (
+          !(error instanceof ApiError && error.code === "study_notes_not_found")
+        ) {
+          setNotesError(errorMessage(error));
+        }
+        setNotesState("ready");
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
 
   const selectedDocument =
     documents.find((document) => document.document_id === selectedId) ?? null;
@@ -141,7 +183,7 @@ export function StudyNotesWorkspace() {
             </p>
             <button
               type="button"
-              onClick={() => void loadDocuments()}
+              onClick={retryDocuments}
               className="btn-secondary mt-3 px-3 py-2 text-xs"
             >
               Try again
@@ -191,7 +233,7 @@ export function StudyNotesWorkspace() {
                 <button
                   key={document.document_id}
                   type="button"
-                  onClick={() => setSelectedId(document.document_id)}
+                  onClick={() => selectDocument(document.document_id)}
                   aria-pressed={active}
                   className={`w-full rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
                     active

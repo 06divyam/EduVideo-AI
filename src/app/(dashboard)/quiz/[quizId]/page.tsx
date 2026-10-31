@@ -1,13 +1,12 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { QuizIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { QuizRunner } from "@/components/quiz-runner";
 
-export default async function QuizDetailPage({
-  params,
-}: PageProps<"/quiz/[quizId]">) {
-  const { quizId } = await params;
+type Params = PageProps<"/quiz/[quizId]">["params"];
 
+export default function QuizDetailPage({ params }: PageProps<"/quiz/[quizId]">) {
   return (
     <div className="space-y-6">
       <PageHeader
@@ -22,7 +21,25 @@ export default async function QuizDetailPage({
         }
       />
 
-      <QuizRunner quizId={quizId} />
+      <Suspense fallback={<LoadingCard />}>
+        <QuizRunnerFromParams params={params} />
+      </Suspense>
     </div>
+  );
+}
+
+async function QuizRunnerFromParams({ params }: { params: Params }) {
+  const { quizId } = await params;
+  return <QuizRunner quizId={quizId} />;
+}
+
+function LoadingCard() {
+  return (
+    <section className="card p-8">
+      <div className="flex items-center gap-3 text-sm text-slate-500">
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+        Loading exam…
+      </div>
+    </section>
   );
 }

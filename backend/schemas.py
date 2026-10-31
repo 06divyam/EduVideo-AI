@@ -14,6 +14,8 @@ class HealthResponse(BaseModel):
     tts_configured: bool
     tts_provider: str
     tts_model: str
+    ffmpeg_available: bool
+    slide_languages: list[str]
 
 
 class UploadPdfResponse(BaseModel):
@@ -224,3 +226,73 @@ class NarrationResponse(BaseModel):
     text_length: int
     chunk_count: int | None = None
     created_at: str
+
+
+LessonLevel = Literal["beginner", "college", "exam"]
+LessonLanguage = Literal[
+    "English", "Spanish", "French", "Hindi", "Arabic", "Portuguese"
+]
+SlideStyle = Literal["illustrated", "classroom", "minimal"]
+
+
+class LessonScene(BaseModel):
+    heading: str
+    bullets: list[str] = Field(min_length=1, max_length=5)
+    narration: str
+
+
+class LessonScript(BaseModel):
+    title: str
+    subject: str
+    summary: str
+    scenes: list[LessonScene] = Field(min_length=1)
+
+
+VideoStatus = Literal["queued", "processing", "ready", "failed"]
+
+
+class VideoCreateRequest(BaseModel):
+    document_id: str = Field(min_length=1)
+    level: LessonLevel = "beginner"
+    language: LessonLanguage = "English"
+    duration_minutes: Literal[2, 5, 8] = 5
+    style: SlideStyle = "illustrated"
+    voice: str | None = None
+
+
+class VideoSceneSummary(BaseModel):
+    heading: str
+    bullets: list[str]
+
+
+class VideoJob(BaseModel):
+    video_id: str
+    document_id: str
+    document_filename: str | None
+    title: str | None
+    subject: str | None
+    status: VideoStatus
+    stage: str
+    progress: int
+    level: str
+    language: str
+    duration_minutes: int
+    style: str
+    voice: str
+    scene_count: int | None
+    duration_seconds: float | None
+    size_bytes: int | None
+    video_url: str | None
+    download_url: str | None
+    thumbnail_url: str | None
+    captions_url: str | None
+    error_code: str | None
+    error_message: str | None
+    scenes: list[VideoSceneSummary] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+    completed_at: str | None
+
+
+class VideosResponse(BaseModel):
+    videos: list[VideoJob]

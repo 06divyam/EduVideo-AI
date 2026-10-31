@@ -21,6 +21,12 @@ export type Video = {
   subject?: string;
   accent?: VideoAccent;
   isSample?: boolean;
+  /** In-app preview page for real videos. */
+  previewHref?: string;
+  downloadUrl?: string;
+  progress?: number;
+  stageLabel?: string;
+  errorMessage?: string;
 };
 
 export type LessonScene = {

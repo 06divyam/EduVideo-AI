@@ -15,6 +15,22 @@ const accentStyles: Record<VideoAccent, string> = {
 export function VideoThumbnail({ video }: { video: Video }) {
   const accent = accentStyles[video.accent ?? "indigo"];
 
+  if (video.thumbnailUrl) {
+    // Real first-slide thumbnail rendered by the backend. A CSS background
+    // keeps it decorative (the card already shows the title).
+    return (
+      <div
+        aria-hidden="true"
+        className="relative aspect-video w-full overflow-hidden bg-slate-900 bg-cover bg-center"
+        style={{ backgroundImage: `url("${video.thumbnailUrl}")` }}
+      >
+        <span className="absolute bottom-3 right-3 rounded-md bg-black/40 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+          {formatDuration(video.durationSeconds)}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       aria-hidden="true"

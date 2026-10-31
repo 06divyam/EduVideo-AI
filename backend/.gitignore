@@ -11,6 +11,9 @@ data/*.db-*
 storage/uploads/*
 storage/extracted/*
 storage/audio/*
+storage/videos/*
+storage/tmp/
 !storage/uploads/.gitkeep
 !storage/extracted/.gitkeep
 !storage/audio/.gitkeep
+!storage/videos/.gitkeep

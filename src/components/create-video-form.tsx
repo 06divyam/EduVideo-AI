@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -25,7 +27,16 @@ import {
   VideoIcon,
   XIcon,
 } from "@/components/icons";
-import { ApiError, uploadPdf, type UploadedDocument } from "@/lib/api";
+import {
+  ApiError,
+  createVideo,
+  getHealth,
+  uploadPdf,
+  type LessonLevel,
+  type SlideStyle,
+  type UploadedDocument,
+  type VideoDurationMinutes,
+} from "@/lib/api";
 import { formatFileSize } from "@/lib/format";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -95,7 +106,7 @@ const styles = [
   {
     value: "illustrated",
     label: "Illustrated Slides",
-    description: "Friendly visuals and diagrams",
+    description: "Colorful slides with friendly shapes",
     icon: ImageIcon,
   },
   {
@@ -125,7 +136,7 @@ const pipeline = [
   },
   {
     title: "Narration",
-    description: "A local TTS engine voices each scene.",
+    description: "Gemini TTS voices each scene.",
     icon: MicIcon,
   },
   {
@@ -135,16 +146,16 @@ const pipeline = [
   },
   {
     title: "MP4",
-    description: "FFmpeg combines audio, slides, and subtitles.",
+    description: "FFmpeg combines slides and narration, with captions.",
     icon: VideoIcon,
   },
 ];
 
 const deliverables = [
-  "Editable scene-by-scene lesson script",
-  "Narrated voiceover with subtitles",
+  "Scene-by-scene lesson outline",
+  "Narrated voiceover with captions",
   "Downloadable MP4 lesson video",
-  "Five quiz questions with explanations",
+  "A timed quiz from the same PDF",
 ];
 
 function validatePdf(file: File) {
@@ -167,6 +178,7 @@ function validatePdf(file: File) {
 }
 
 export function CreateVideoForm() {
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [notes, setNotes] = useState("");
@@ -178,8 +190,32 @@ export function CreateVideoForm() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [status, setStatus] = useState<
-    "idle" | "loading" | "done" | "unavailable" | "error"
+    "idle" | "loading" | "starting" | "done" | "unavailable" | "error"
   >("idle");
+  // Languages the backend can render slides for (null until /health loads).
+  const [slideLanguages, setSlideLanguages] = useState<string[] | null>(null);
+  const busy = status === "loading" || status === "starting";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadHealth() {
+      try {
+        const health = await getHealth();
+        if (!cancelled) {
+          setSlideLanguages(health.slide_languages);
+        }
+      } catch {
+        // Leave every language selectable; the backend validates on submit.
+      }
+    }
+
+    void loadHealth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [progress, setProgress] = useState(0);
   const [document, setDocument] = useState<UploadedDocument | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -196,7 +232,7 @@ export function CreateVideoForm() {
       : "Not added yet";
 
   function selectFile(candidate: File) {
-    if (status === "loading") {
+    if (busy) {
       return;
     }
 
@@ -244,7 +280,7 @@ export function CreateVideoForm() {
   }
 
   function clearFile() {
-    if (status === "loading") {
+    if (busy) {
       return;
     }
 
@@ -291,42 +327,57 @@ export function CreateVideoForm() {
       setStatus("unavailable");
       setFeedback({
         tone: "warning",
-        title: "Notes saved, extraction not connected",
+        title: "Upload a PDF to generate a video",
         message:
-          "PDF upload and text extraction work today. Note-only lessons will run once the Gemini pipeline is connected.",
+          "Note-only lessons are not supported yet. Upload a PDF and the backend will build the narrated video from it.",
       });
       return;
     }
 
-    setStatus("loading");
-    setProgress(0);
-    setDocument(null);
+    // Reuse the uploaded document when retrying with the same PDF.
+    let uploaded = document;
+
+    if (!uploaded) {
+      setStatus("loading");
+      setProgress(0);
+
+      try {
+        uploaded = await uploadPdf(file, { onProgress: setProgress });
+        setDocument(uploaded);
+      } catch (error) {
+        setStatus("error");
+        setFeedback({
+          tone: "error",
+          title: "PDF could not be processed",
+          message:
+            error instanceof ApiError
+              ? error.message
+              : "The PDF could not be processed. Please try again.",
+        });
+        return;
+      }
+    }
+
+    setStatus("starting");
 
     try {
-      const result = await uploadPdf(file, { onProgress: setProgress });
-
-      setDocument(result);
-      setStatus("done");
-      setFeedback({
-        tone: "success",
-        title: "PDF text extracted",
-        message: `Read ${result.page_count} ${
-          result.page_count === 1 ? "page" : "pages"
-        } and ${result.text_length.toLocaleString()} characters from ${
-          result.filename
-        }. Lesson generation is the next backend step.`,
+      const job = await createVideo({
+        documentId: uploaded.document_id,
+        level: level as LessonLevel,
+        language,
+        durationMinutes: Number(duration) as VideoDurationMinutes,
+        style: style as SlideStyle,
       });
+      router.push(`/videos/${job.video_id}`);
     } catch (error) {
-      const message =
-        error instanceof ApiError
-          ? error.message
-          : "The PDF could not be processed. Please try again.";
-
       setStatus("error");
       setFeedback({
         tone: "error",
-        title: "PDF could not be processed",
-        message,
+        title: "Video could not be started",
+        message:
+          error instanceof ApiError
+            ? error.message
+            : "The video could not be started. Please try again.",
       });
     }
   }
@@ -391,7 +442,7 @@ export function CreateVideoForm() {
                           ? progress === 100
                             ? "Extracting text..."
                             : `Uploading ${progress}%`
-                          : status === "done"
+                          : document
                             ? "PDF extracted"
                             : "PDF ready"}
                       </p>
@@ -399,7 +450,7 @@ export function CreateVideoForm() {
                     <button
                       type="button"
                       onClick={clearFile}
-                      disabled={status === "loading"}
+                      disabled={busy}
                       aria-label="Remove selected PDF"
                       className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
                     >
@@ -420,7 +471,7 @@ export function CreateVideoForm() {
                     </div>
                   ) : (
                     <p className="mt-3 text-xs text-slate-500">
-                      {status === "done"
+                      {document
                         ? "Extracted text is shown below. Drop another PDF to replace it."
                         : "Drop another PDF to replace it, or remove it to paste notes."}
                     </p>
@@ -567,7 +618,7 @@ export function CreateVideoForm() {
 
               <p className="mt-3 text-[11px] text-slate-400">
                 Document {document.document_id.slice(0, 8)}… is stored in the
-                backend for the next pipeline stage.
+                backend and used for the lesson video.
               </p>
             </section>
           ) : null}
@@ -630,11 +681,17 @@ export function CreateVideoForm() {
                     onChange={(event) => setLanguage(event.target.value)}
                     className="input appearance-none pr-9"
                   >
-                    {languages.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
+                    {languages.map((item) => {
+                      const unavailable =
+                        slideLanguages !== null &&
+                        !slideLanguages.includes(item);
+
+                      return (
+                        <option key={item} value={item} disabled={unavailable}>
+                          {unavailable ? `${item} (not available)` : item}
+                        </option>
+                      );
+                    })}
                   </select>
                   <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 </div>
@@ -715,26 +772,28 @@ export function CreateVideoForm() {
                 </p>
                 <p className="hint mt-0.5">
                   {file
-                    ? "PDFs are sent to the local FastAPI backend for text extraction. Lesson generation is still pending."
-                    : "Notes stay in this browser until note-based generation is connected."}
+                    ? "Your PDF goes to the local FastAPI backend, which writes the script, records narration, renders slides, and builds the MP4. One video is generated at a time."
+                    : "Note-only lessons are not supported yet. Upload a PDF to generate a video."}
                 </p>
               </div>
               <button
                 type="submit"
-                disabled={status === "loading"}
+                disabled={busy}
                 className="btn-primary shrink-0"
               >
-                {status === "loading" ? (
+                {busy ? (
                   <>
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                    {progress === 100
-                      ? "Extracting text..."
-                      : `Uploading ${progress}%`}
+                    {status === "starting"
+                      ? "Starting video..."
+                      : progress === 100
+                        ? "Extracting text..."
+                        : `Uploading ${progress}%`}
                   </>
                 ) : (
                   <>
                     <SparklesIcon className="h-4 w-4" />
-                    {file ? "Extract PDF Text" : "Generate Lesson"}
+                    {file ? "Generate Video" : "Generate Lesson"}
                   </>
                 )}
               </button>
@@ -820,13 +879,13 @@ export function CreateVideoForm() {
                 <InfoIcon className="h-4 w-4" />
               </span>
               <h2 className="text-sm font-semibold text-slate-900">
-                Extraction connected
+                Pipeline connected
               </h2>
             </div>
             <p className="mt-2 text-xs leading-relaxed text-slate-500">
-              PDF upload and text extraction run on the local FastAPI service.
-              Gemini lesson generation, local TTS, and FFmpeg rendering are not
-              connected yet.
+              PDF extraction, Gemini lesson scripts, Gemini TTS narration,
+              Pillow slides, and FFmpeg rendering run on the local FastAPI
+              service. A 5-minute video takes about a minute to generate.
             </p>
             <Link
               href="/settings"
@@ -896,7 +955,7 @@ export function CreateVideoForm() {
                   {levelLabel} · {language} · {durationLabel}
                 </p>
                 <p className="mt-1 text-lg font-semibold leading-snug">
-                  Your narrated lesson will appear here
+                  Your narrated lesson opens in the player
                 </p>
               </div>
               <div className="flex items-center justify-between">

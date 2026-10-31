@@ -61,6 +61,11 @@ export default function SettingsPage() {
           ? `${health?.gemini_model ?? "Gemini"} ready`
           : "GEMINI_API_KEY missing";
 
+  const ttsReady = health?.tts_configured === true;
+  const ffmpegReady = health?.ffmpeg_available === true;
+  const pending = healthState === "loading";
+  const unreachable = healthState === "error";
+
   const providers = [
     {
       name: "PDF extraction",
@@ -85,15 +90,27 @@ export default function SettingsPage() {
       icon: QuizIcon,
     },
     {
-      name: "Local TTS",
-      detail: "Piper not installed",
-      tone: "amber",
+      name: "Gemini TTS",
+      detail: pending
+        ? "Checking…"
+        : unreachable
+          ? "Backend unreachable"
+          : ttsReady
+            ? `${health?.tts_model ?? "Gemini TTS"} ready`
+            : "GEMINI_API_KEY missing",
+      tone: ttsReady ? "emerald" : pending ? "slate" : "amber",
       icon: MicIcon,
     },
     {
       name: "FFmpeg renderer",
-      detail: "ffmpeg not installed",
-      tone: "rose",
+      detail: pending
+        ? "Checking…"
+        : unreachable
+          ? "Backend unreachable"
+          : ffmpegReady
+            ? "Available"
+            : "ffmpeg not installed",
+      tone: ffmpegReady ? "emerald" : pending ? "slate" : "rose",
       icon: VideoIcon,
     },
     {
@@ -235,8 +252,18 @@ export default function SettingsPage() {
               })}
             </ul>
             <p className="mt-4 text-[11px] leading-relaxed text-slate-400">
-              Install FFmpeg with <code className="font-mono">brew install ffmpeg</code>{" "}
-              before enabling rendering.
+              {ffmpegReady ? (
+                <>
+                  Video rendering is enabled. Slide languages:{" "}
+                  {health?.slide_languages.join(", ")}.
+                </>
+              ) : (
+                <>
+                  Install FFmpeg with{" "}
+                  <code className="font-mono">brew install ffmpeg</code> to
+                  enable video rendering.
+                </>
+              )}
             </p>
           </section>
         </aside>

@@ -1,4 +1,5 @@
 import logging
+import re
 
 from google import genai
 from google.genai import types
@@ -58,6 +59,14 @@ def map_gemini_exception(exc: Exception) -> GeminiServiceError:
             status_code=502,
         )
 
+    if "perday" in message or "per day" in message:
+        return GeminiServiceError(
+            "gemini_daily_quota",
+            "Gemini's daily request limit for this model has been reached (free tier). "
+            "Try again after the quota resets, or use an API key with billing enabled.",
+            status_code=429,
+        )
+
     if "quota" in message or "rate limit" in message or "429" in message:
         return GeminiServiceError(
             "gemini_rate_limited",
@@ -78,7 +87,16 @@ def map_gemini_exception(exc: Exception) -> GeminiServiceError:
     )
 
 
-def _generate_structured(prompt: str, schema: type) -> object:
+def retry_delay_seconds(exc: Exception) -> float | None:
+    """Server-suggested retry delay for a 429, if the error includes one."""
+    text = str(exc)
+    match = re.search(r"retry in ([0-9.]+)s", text, re.IGNORECASE) or re.search(
+        r"retryDelay'?\"?:\s*'?\"?([0-9.]+)s", text
+    )
+    return float(match.group(1)) if match else None
+
+
+def generate_structured(prompt: str, schema: type) -> object:
     client = get_client()
 
     try:
@@ -143,7 +161,7 @@ SOURCE MATERIAL:
 {source}
 \"\"\"
 """
-    notes = _generate_structured(prompt, StudyNotes)
+    notes = generate_structured(prompt, StudyNotes)
 
     if not notes.title.strip() or not notes.summary.strip():
         raise GeminiServiceError(
@@ -205,7 +223,7 @@ SOURCE MATERIAL:
 {source}
 \"\"\"
 """
-    quiz = _generate_structured(prompt, GeneratedQuiz)
+    quiz = generate_structured(prompt, GeneratedQuiz)
 
     if len(quiz.questions) != question_count:
         raise GeminiServiceError(

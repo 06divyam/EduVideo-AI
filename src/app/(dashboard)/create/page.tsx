@@ -9,7 +9,7 @@ export default function CreateVideoPage() {
       <PageHeader
         eyebrow="Create Video"
         title="Start a new lesson"
-        description="Upload educational material, choose how it should be taught, and prepare a narrated explainer video."
+        description="Upload educational material, choose how it should be taught, and generate a narrated explainer video."
         action={
           <Link href="/videos" className="btn-secondary">
             My Videos
@@ -22,8 +22,8 @@ export default function CreateVideoPage() {
 
       <p className="flex items-center gap-2 pb-2 text-xs text-slate-400">
         <PlusCircleIcon className="h-4 w-4" />
-        Education track only. PDF text extraction is live; lesson generation is
-        disabled until Gemini is connected.
+        Education track only. Videos are generated from your PDF with Gemini,
+        Gemini TTS, Pillow, and FFmpeg.
       </p>
     </div>
   );

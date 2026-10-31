@@ -2,7 +2,6 @@ import Link from "next/link";
 import { PlusCircleIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { VideoLibrary } from "@/components/video-library";
-import { sampleVideos } from "@/lib/data";
 
 export default function VideosPage() {
   return (
@@ -10,7 +9,7 @@ export default function VideosPage() {
       <PageHeader
         eyebrow="My Videos"
         title="Video library"
-        description="Search, filter, and review every lesson you create. Playback and downloads unlock when the renderer is connected."
+        description="Search, filter, and review every lesson you create. Open a video to watch it with captions or download the MP4."
         action={
           <Link href="/create" className="btn-primary">
             <PlusCircleIcon className="h-4 w-4" />
@@ -19,11 +18,11 @@ export default function VideosPage() {
         }
       />
 
-      <VideoLibrary videos={sampleVideos} />
+      <VideoLibrary />
 
       <p className="pb-2 text-xs text-slate-400">
-        Sample previews are labeled and contain no generated AI output. Real
-        videos will be served by the FastAPI backend.
+        Videos are generated from your uploaded PDFs and served by the FastAPI
+        backend.
       </p>
     </div>
   );

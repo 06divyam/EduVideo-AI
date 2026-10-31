@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import {
+  AlertTriangleIcon,
   InfoIcon,
   PlusCircleIcon,
   SearchIcon,
@@ -11,7 +12,15 @@ import {
   XIcon,
 } from "@/components/icons";
 import { VideoCard } from "@/components/video-card";
+import {
+  ApiError,
+  isVideoActive,
+  listVideos,
+  toLibraryVideo,
+} from "@/lib/api";
 import type { Video, VideoStatus } from "@/lib/types";
+
+const POLL_INTERVAL_MS = 3000;
 
 type StatusFilter = "all" | VideoStatus;
 
@@ -22,9 +31,52 @@ const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: "failed", label: "Failed" },
 ];
 
-export function VideoLibrary({ videos }: { videos: Video[] }) {
+export function VideoLibrary() {
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+
+  // Load real videos from the backend; keep refreshing while a job runs.
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | undefined;
+
+    async function load() {
+      try {
+        const result = await listVideos();
+        if (cancelled) {
+          return;
+        }
+        setVideos(result.videos.map(toLibraryVideo));
+        setLoadState("ready");
+        setLoadError(null);
+        if (result.videos.some(isVideoActive)) {
+          timer = window.setTimeout(load, POLL_INTERVAL_MS);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadState("error");
+          setLoadError(
+            error instanceof ApiError
+              ? error.message
+              : "The video library could not be loaded.",
+          );
+        }
+      }
+    }
+
+    void load();
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [reloadKey]);
 
   const counts = useMemo(
     () => ({
@@ -52,6 +104,45 @@ export function VideoLibrary({ videos }: { videos: Video[] }) {
   }, [search, status, videos]);
 
   const hasFilters = search.trim().length > 0 || status !== "all";
+
+  if (loadState === "loading") {
+    return (
+      <section className="card p-8">
+        <div className="flex items-center gap-3 text-sm text-slate-500">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+          Loading your videos…
+        </div>
+      </section>
+    );
+  }
+
+  if (loadState === "error") {
+    return (
+      <section className="card p-6">
+        <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
+          <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+          <div>
+            <p className="text-sm font-semibold text-rose-900">
+              Could not load your videos
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-rose-800">
+              {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoadState("loading");
+                setReloadKey((key) => key + 1);
+              }}
+              className="btn-secondary mt-3 px-3 py-2 text-xs"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -132,7 +223,7 @@ export function VideoLibrary({ videos }: { videos: Video[] }) {
           <EmptyState
             icon={VideoIcon}
             title="Your library is empty"
-            description="Generated lessons will appear here. Upload a PDF or paste your notes to create your first narrated video."
+            description="Generated lessons will appear here. Upload a PDF to create your first narrated video."
             action={
               <Link href="/create" className="btn-primary">
                 <PlusCircleIcon className="h-4 w-4" />
@@ -182,8 +273,7 @@ export function VideoLibrary({ videos }: { videos: Video[] }) {
           </div>
           {hasFilters ? (
             <p className="text-xs text-slate-400">
-              Filters are applied locally. Real results will come from the
-              backend video library.
+              Filters apply to the videos stored by the backend.
             </p>
           ) : null}
         </>

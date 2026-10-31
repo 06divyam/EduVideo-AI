@@ -56,6 +56,36 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
 CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz
     ON quiz_attempts(quiz_id, completed_at DESC);
 
+CREATE TABLE IF NOT EXISTS videos (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    progress INTEGER NOT NULL DEFAULT 0,
+    title TEXT,
+    subject TEXT,
+    level TEXT NOT NULL,
+    language TEXT NOT NULL,
+    duration_minutes INTEGER NOT NULL,
+    style TEXT NOT NULL,
+    voice TEXT NOT NULL,
+    scene_count INTEGER,
+    duration_seconds REAL,
+    size_bytes INTEGER,
+    video_path TEXT,
+    thumbnail_path TEXT,
+    captions_path TEXT,
+    script_json TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    completed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_videos_created
+    ON videos(created_at DESC);
+
 CREATE TABLE IF NOT EXISTS narrations (
     id TEXT PRIMARY KEY,
     document_id TEXT,
@@ -500,3 +530,94 @@ def get_narration(
         ).fetchone()
 
     return _narration_from_row(row) if row is not None else None
+
+
+VIDEO_UPDATABLE_COLUMNS = frozenset(
+    {
+        "status", "stage", "progress", "title", "subject", "scene_count",
+        "duration_seconds", "size_bytes", "video_path", "thumbnail_path",
+        "captions_path", "script_json", "error_code", "error_message",
+        "updated_at", "completed_at",
+    }
+)
+ACTIVE_VIDEO_STATUSES = ("queued", "processing")
+
+
+def create_video(fields: dict, db_path: Path = DATABASE_PATH) -> None:
+    columns = ", ".join(fields)
+    placeholders = ", ".join("?" for _ in fields)
+    with get_connection(db_path) as connection:
+        connection.execute(
+            f"INSERT INTO videos ({columns}) VALUES ({placeholders})",
+            tuple(fields.values()),
+        )
+
+
+def update_video(video_id: str, db_path: Path = DATABASE_PATH, **fields) -> None:
+    unknown = set(fields) - VIDEO_UPDATABLE_COLUMNS
+    if unknown:
+        raise ValueError(f"Cannot update video columns: {sorted(unknown)}")
+    if not fields:
+        return
+    assignments = ", ".join(f"{column} = ?" for column in fields)
+    with get_connection(db_path) as connection:
+        connection.execute(
+            f"UPDATE videos SET {assignments} WHERE id = ?",
+            (*fields.values(), video_id),
+        )
+
+
+_VIDEO_SELECT = """
+    SELECT v.*, d.filename AS document_filename
+    FROM videos v
+    LEFT JOIN documents d ON d.id = v.document_id
+"""
+
+
+def get_video(video_id: str, db_path: Path = DATABASE_PATH) -> dict | None:
+    with get_connection(db_path) as connection:
+        row = connection.execute(
+            _VIDEO_SELECT + " WHERE v.id = ?", (video_id,)
+        ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def list_videos(limit: int = 100, db_path: Path = DATABASE_PATH) -> list[dict]:
+    with get_connection(db_path) as connection:
+        rows = connection.execute(
+            _VIDEO_SELECT + " ORDER BY v.created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_active_video(db_path: Path = DATABASE_PATH) -> dict | None:
+    with get_connection(db_path) as connection:
+        row = connection.execute(
+            _VIDEO_SELECT + " WHERE v.status IN (?, ?) ORDER BY v.created_at LIMIT 1",
+            ACTIVE_VIDEO_STATUSES,
+        ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def fail_interrupted_videos(
+    message: str, now: str, db_path: Path = DATABASE_PATH
+) -> int:
+    with get_connection(db_path) as connection:
+        cursor = connection.execute(
+            """
+            UPDATE videos
+            SET status = 'failed', stage = 'failed', error_code = 'interrupted',
+                error_message = ?, updated_at = ?
+            WHERE status IN (?, ?)
+            """,
+            (message, now, *ACTIVE_VIDEO_STATUSES),
+        )
+    return cursor.rowcount
+
+
+def count_ready_videos(db_path: Path = DATABASE_PATH) -> int:
+    with get_connection(db_path) as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) AS count FROM videos WHERE status = 'ready'"
+        ).fetchone()
+    return int(row["count"])

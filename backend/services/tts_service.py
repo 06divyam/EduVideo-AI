@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import threading
+import time
 import unicodedata
 import uuid
 import wave
@@ -37,6 +38,7 @@ from services.gemini_service import (
     get_client,
     is_configured as gemini_is_configured,
     map_gemini_exception,
+    retry_delay_seconds,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,8 @@ logger = logging.getLogger(__name__)
 MIN_NARRATION_CHARS = 2
 CHUNK_PAUSE_SECONDS = 0.25
 DEFAULT_PCM_RATE = 24_000
+RATE_LIMIT_RETRIES = 2
+MAX_RETRY_WAIT_SECONDS = 60
 
 # Only one narration is generated at a time (project constraint; also keeps
 # Gemini quota use predictable).
@@ -135,18 +139,33 @@ class GeminiTtsProvider:
             http_options=types.HttpOptions(timeout=TTS_TIMEOUT_SECONDS * 1000),
         )
 
-        try:
-            response = client.models.generate_content(
-                model=self.model,
-                contents=text,
-                config=config,
-            )
-        except Exception as exc:
-            logger.exception("Gemini TTS request failed")
-            mapped = map_gemini_exception(exc)
-            raise TtsServiceError(
-                mapped.code, mapped.message, mapped.status_code
-            ) from exc
+        response = None
+        for attempt in range(1, RATE_LIMIT_RETRIES + 2):
+            try:
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=text,
+                    config=config,
+                )
+                break
+            except Exception as exc:
+                mapped = map_gemini_exception(exc)
+                delay = retry_delay_seconds(exc)
+                # Per-minute limits clear quickly: wait and retry. Daily
+                # quota and other errors are reported immediately.
+                if (
+                    mapped.code == "gemini_rate_limited"
+                    and delay is not None
+                    and delay <= MAX_RETRY_WAIT_SECONDS
+                    and attempt <= RATE_LIMIT_RETRIES
+                ):
+                    logger.warning("Gemini TTS rate limited; retrying in %.1fs", delay)
+                    time.sleep(delay + 1)
+                    continue
+                logger.exception("Gemini TTS request failed")
+                raise TtsServiceError(
+                    mapped.code, mapped.message, mapped.status_code
+                ) from exc
 
         blob = _first_audio_blob(response)
         if blob is None or not blob.data:
@@ -311,8 +330,19 @@ def _write_wav(clips: list[AudioClip], destination: Path) -> tuple[float, AudioC
     return duration, first
 
 
-def synthesize_narration(text: str, voice: str | None = None) -> NarrationAudio:
-    """Convert narration text into a WAV file under storage/audio/."""
+def synthesize_narration(
+    text: str,
+    voice: str | None = None,
+    *,
+    destination: Path | None = None,
+    wait: bool = False,
+) -> NarrationAudio:
+    """Convert narration text into a WAV file.
+
+    By default the file goes to storage/audio/<uuid>.wav and the call fails
+    fast if another narration is running. The video pipeline passes its own
+    ``destination`` and ``wait=True`` so scenes queue behind the lock.
+    """
     provider = get_provider()
 
     if not provider.is_configured():
@@ -336,7 +366,12 @@ def synthesize_narration(text: str, voice: str | None = None) -> NarrationAudio:
             status_code=422,
         )
 
-    if not _generation_lock.acquire(blocking=False):
+    acquired = (
+        _generation_lock.acquire(timeout=TTS_TIMEOUT_SECONDS)
+        if wait
+        else _generation_lock.acquire(blocking=False)
+    )
+    if not acquired:
         raise TtsServiceError(
             "tts_busy",
             "Another narration is being generated. Wait for it to finish and try again.",
@@ -347,9 +382,12 @@ def synthesize_narration(text: str, voice: str | None = None) -> NarrationAudio:
         chunks = split_narration(cleaned)
         clips = [provider.synthesize(chunk, matched) for chunk in chunks]
 
-        audio_id = str(uuid.uuid4())
-        destination = AUDIO_DIR / f"{audio_id}.wav"
-        AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+        if destination is None:
+            audio_id = str(uuid.uuid4())
+            destination = AUDIO_DIR / f"{audio_id}.wav"
+        else:
+            audio_id = destination.stem
+        destination.parent.mkdir(parents=True, exist_ok=True)
         duration, audio_format = _write_wav(clips, destination)
     finally:
         _generation_lock.release()

@@ -10,6 +10,8 @@ DATA_DIR = BASE_DIR / "data"
 UPLOAD_DIR = BASE_DIR / "storage" / "uploads"
 EXTRACTED_DIR = BASE_DIR / "storage" / "extracted"
 AUDIO_DIR = BASE_DIR / "storage" / "audio"
+VIDEO_DIR = BASE_DIR / "storage" / "videos"
+VIDEO_WORK_DIR = BASE_DIR / "storage" / "tmp"
 
 DATABASE_PATH = DATA_DIR / "eduvideo.db"
 
@@ -47,5 +49,7 @@ def cors_origins() -> list[str]:
 
 
 def ensure_directories() -> None:
-    for directory in (DATA_DIR, UPLOAD_DIR, EXTRACTED_DIR, AUDIO_DIR):
+    for directory in (
+        DATA_DIR, UPLOAD_DIR, EXTRACTED_DIR, AUDIO_DIR, VIDEO_DIR, VIDEO_WORK_DIR,
+    ):
         directory.mkdir(parents=True, exist_ok=True)

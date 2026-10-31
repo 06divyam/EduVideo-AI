@@ -1,3 +1,5 @@
+import type { Video } from "@/lib/types";
+
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
 ).replace(/\/+$/, "");
@@ -7,6 +9,11 @@ export type HealthResponse = {
   service: string;
   gemini_configured: boolean;
   gemini_model: string;
+  tts_configured: boolean;
+  tts_provider: string;
+  tts_model: string;
+  ffmpeg_available: boolean;
+  slide_languages: string[];
 };
 
 export type UploadedDocument = {
@@ -388,4 +395,115 @@ export async function getAttempt(attemptId: string): Promise<AttemptResult> {
 
 export async function getProgress(): Promise<ProgressResponse> {
   return request<ProgressResponse>("/api/progress");
+}
+
+export type VideoJobStatus = "queued" | "processing" | "ready" | "failed";
+export type LessonLevel = "beginner" | "college" | "exam";
+export type SlideStyle = "illustrated" | "classroom" | "minimal";
+export type VideoDurationMinutes = 2 | 5 | 8;
+
+export type VideoSceneSummary = {
+  heading: string;
+  bullets: string[];
+};
+
+export type VideoJob = {
+  video_id: string;
+  document_id: string;
+  document_filename: string | null;
+  title: string | null;
+  subject: string | null;
+  status: VideoJobStatus;
+  stage: string;
+  progress: number;
+  level: string;
+  language: string;
+  duration_minutes: number;
+  style: string;
+  voice: string;
+  scene_count: number | null;
+  duration_seconds: number | null;
+  size_bytes: number | null;
+  video_url: string | null;
+  download_url: string | null;
+  thumbnail_url: string | null;
+  captions_url: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  scenes: VideoSceneSummary[];
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+};
+
+export type VideosResponse = {
+  videos: VideoJob[];
+};
+
+/** Resolve a backend-relative URL (e.g. "/api/videos/x/file") for the browser. */
+export function backendUrl(path: string | null | undefined): string | undefined {
+  return path ? `${API_BASE_URL}${path}` : undefined;
+}
+
+export async function createVideo(input: {
+  documentId: string;
+  level: LessonLevel;
+  language: string;
+  durationMinutes: VideoDurationMinutes;
+  style: SlideStyle;
+  voice?: string;
+}): Promise<VideoJob> {
+  return request<VideoJob>("/api/videos", {
+    method: "POST",
+    body: JSON.stringify({
+      document_id: input.documentId,
+      level: input.level,
+      language: input.language,
+      duration_minutes: input.durationMinutes,
+      style: input.style,
+      ...(input.voice ? { voice: input.voice } : {}),
+    }),
+  });
+}
+
+export async function listVideos(): Promise<VideosResponse> {
+  return request<VideosResponse>("/api/videos");
+}
+
+export async function getVideo(videoId: string): Promise<VideoJob> {
+  return request<VideoJob>(`/api/videos/${encodeURIComponent(videoId)}`);
+}
+
+export function isVideoActive(job: Pick<VideoJob, "status">): boolean {
+  return job.status === "queued" || job.status === "processing";
+}
+
+export const videoStageLabels: Record<string, string> = {
+  queued: "Waiting to start",
+  script: "Writing the lesson script",
+  narration: "Recording narration",
+  slides: "Rendering slides",
+  assembling: "Assembling the MP4",
+  done: "Ready",
+  failed: "Failed",
+};
+
+/** Map a backend job to the card model used by the library and dashboard. */
+export function toLibraryVideo(job: VideoJob): Video {
+  return {
+    id: job.video_id,
+    title: job.title ?? job.document_filename ?? "Untitled lesson",
+    createdAt: job.created_at,
+    durationSeconds: Math.round(job.duration_seconds ?? 0),
+    status: job.status === "ready" ? "ready" : job.status === "failed" ? "failed" : "processing",
+    videoUrl: backendUrl(job.video_url),
+    downloadUrl: backendUrl(job.download_url),
+    thumbnailUrl: backendUrl(job.thumbnail_url),
+    previewHref: `/videos/${job.video_id}`,
+    subject: job.subject ?? job.document_filename ?? undefined,
+    accent: job.style === "classroom" ? "emerald" : job.style === "minimal" ? "slate" : "indigo",
+    progress: job.progress,
+    stageLabel: videoStageLabels[job.stage] ?? job.stage,
+    errorMessage: job.error_message ?? undefined,
+  };
 }

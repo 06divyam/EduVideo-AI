@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
@@ -15,6 +15,7 @@ from config import (
     EXTRACTED_DIR,
     GEMINI_MODEL,
     GEMINI_TTS_MODEL,
+    GEMINI_TTS_VOICE,
     QUIZ_TIME_PER_QUESTION_SECONDS,
     TTS_PROVIDER,
     UPLOAD_DIR,
@@ -26,6 +27,7 @@ from database import (
     DocumentRecord,
     NarrationRecord,
     QuizRecord,
+    count_ready_videos,
     create_attempt,
     create_document,
     create_narration,
@@ -36,11 +38,13 @@ from database import (
     get_latest_study_notes,
     get_narration,
     get_quiz,
+    get_video,
     init_db,
     list_attempts,
     list_documents_with_flags,
     list_quizzes,
     list_study_notes,
+    list_videos,
     update_document_text,
 )
 from schemas import (
@@ -65,7 +69,20 @@ from schemas import (
     StudyNotesResponse,
     TopicPerformance,
     UploadPdfResponse,
+    VideoCreateRequest,
+    VideoJob,
+    VideoSceneSummary,
+    VideosResponse,
     WeakTopic,
+)
+from services import ffmpeg_service, slide_service
+from services.video_service import (
+    VideoOptions,
+    VideoServiceError,
+    recover_interrupted_jobs,
+    resolve_output,
+    script_from_json,
+    start_video_job,
 )
 from services.gemini_service import (
     GeminiServiceError,
@@ -96,6 +113,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(_: FastAPI):
     ensure_directories()
     init_db()
+    recover_interrupted_jobs()
     yield
 
 
@@ -269,6 +287,15 @@ def health() -> HealthResponse:
         tts_configured=tts_is_configured(),
         tts_provider=TTS_PROVIDER,
         tts_model=GEMINI_TTS_MODEL,
+        ffmpeg_available=ffmpeg_service.is_available(),
+        slide_languages=sorted(
+            slide_service.LATIN_LANGUAGES
+            | (
+                set(slide_service.COMPLEX_SCRIPT_FONTS)
+                if slide_service.raqm_available()
+                else set()
+            )
+        ),
     )
 
 
@@ -695,7 +722,7 @@ def progress() -> ProgressResponse:
 
     return ProgressResponse(
         total_lessons=len(documents_list),
-        videos_generated=0,
+        videos_generated=count_ready_videos(),
         quizzes_completed=len(attempts),
         average_quiz_score=average_score,
         weak_topics=weak_topics,
@@ -789,3 +816,140 @@ def narration_audio(narration_id: str) -> FileResponse:
         filename=f"narration-{record.id}.wav",
         content_disposition_type="inline",
     )
+
+
+def video_job(row: dict, include_scenes: bool = False) -> VideoJob:
+    video_id = row["id"]
+    ready = row["status"] == "ready"
+    base = f"/api/videos/{video_id}"
+    scenes: list[VideoSceneSummary] = []
+    if include_scenes:
+        script = script_from_json(row.get("script_json"))
+        if script is not None:
+            scenes = [
+                VideoSceneSummary(heading=scene.heading, bullets=scene.bullets)
+                for scene in script.scenes
+            ]
+
+    return VideoJob(
+        video_id=video_id,
+        document_id=row["document_id"],
+        document_filename=row.get("document_filename"),
+        title=row.get("title"),
+        subject=row.get("subject"),
+        status=row["status"],
+        stage=row["stage"],
+        progress=row["progress"],
+        level=row["level"],
+        language=row["language"],
+        duration_minutes=row["duration_minutes"],
+        style=row["style"],
+        voice=row["voice"],
+        scene_count=row.get("scene_count"),
+        duration_seconds=row.get("duration_seconds"),
+        size_bytes=row.get("size_bytes"),
+        video_url=f"{base}/file" if ready else None,
+        download_url=f"{base}/file?download=true" if ready else None,
+        thumbnail_url=f"{base}/thumbnail" if ready and row.get("thumbnail_path") else None,
+        captions_url=f"{base}/captions" if ready and row.get("captions_path") else None,
+        error_code=row.get("error_code"),
+        error_message=row.get("error_message"),
+        scenes=scenes,
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        completed_at=row.get("completed_at"),
+    )
+
+
+def get_video_or_404(video_id: str) -> dict:
+    row = get_video(video_id)
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "video_not_found", "message": "No video matches that id."},
+        )
+    return row
+
+
+def video_output_or_error(row: dict, column: str, suffix: str) -> Path:
+    if row["status"] != "ready":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "video_not_ready",
+                "message": "This video is not ready yet.",
+            },
+        )
+    path = resolve_output(row.get(column), suffix)
+    if path is None:
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "code": "video_file_missing",
+                "message": "The file for this video is missing. Generate the video again.",
+            },
+        )
+    return path
+
+
+@app.post("/api/videos", response_model=VideoJob, status_code=202)
+def create_video_job(payload: VideoCreateRequest) -> VideoJob:
+    document = get_document_or_404(payload.document_id)
+    options = VideoOptions(
+        level=payload.level,
+        language=payload.language,
+        duration_minutes=payload.duration_minutes,
+        style=payload.style,
+        voice=payload.voice or GEMINI_TTS_VOICE,
+    )
+
+    try:
+        video_id = start_video_job(document, options)
+    except VideoServiceError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+    return video_job(get_video_or_404(video_id))
+
+
+@app.get("/api/videos", response_model=VideosResponse)
+def videos_list() -> VideosResponse:
+    return VideosResponse(videos=[video_job(row) for row in list_videos()])
+
+
+@app.get("/api/videos/{video_id}", response_model=VideoJob)
+def video_detail(video_id: str) -> VideoJob:
+    return video_job(get_video_or_404(video_id), include_scenes=True)
+
+
+@app.get("/api/videos/{video_id}/file")
+def video_file(video_id: str, download: bool = Query(default=False)) -> FileResponse:
+    # Files are looked up by id in the database and must live in
+    # storage/videos; clients never supply a path.
+    row = get_video_or_404(video_id)
+    path = video_output_or_error(row, "video_path", ".mp4")
+    safe_title = "".join(
+        char if char.isalnum() or char in " -_" else "" for char in (row.get("title") or "lesson")
+    ).strip().replace(" ", "-")[:60] or "lesson"
+    return FileResponse(
+        path,
+        media_type="video/mp4",
+        filename=f"{safe_title}.mp4",
+        content_disposition_type="attachment" if download else "inline",
+    )
+
+
+@app.get("/api/videos/{video_id}/thumbnail")
+def video_thumbnail(video_id: str) -> FileResponse:
+    row = get_video_or_404(video_id)
+    path = video_output_or_error(row, "thumbnail_path", ".jpg")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@app.get("/api/videos/{video_id}/captions")
+def video_captions(video_id: str) -> FileResponse:
+    row = get_video_or_404(video_id)
+    path = video_output_or_error(row, "captions_path", ".vtt")
+    return FileResponse(path, media_type="text/vtt")

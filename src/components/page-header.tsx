@@ -1,31 +1,25 @@
 import type { ReactNode } from "react";
 
 type PageHeaderProps = {
-  eyebrow: string;
+  /** Kept for API compatibility; no longer rendered (the sidebar shows the section). */
+  eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
   action?: ReactNode;
 };
 
-export function PageHeader({
-  eyebrow,
-  title,
-  description,
-  action,
-}: PageHeaderProps) {
+export function PageHeader({ title, description, action }: PageHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <p className="flex items-center gap-2 text-sm font-medium text-indigo-600">
-          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-          {eyebrow}
-        </p>
-        <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+    <div className="flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-xl font-semibold tracking-tight text-slate-900">
           {title}
         </h1>
-        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-500">
-          {description}
-        </p>
+        {description ? (
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
+            {description}
+          </p>
+        ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>

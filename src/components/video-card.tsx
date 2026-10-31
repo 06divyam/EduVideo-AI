@@ -28,7 +28,7 @@ export function VideoCard({ video, showActions = true }: VideoCardProps) {
         <VideoThumbnail video={video} />
 
         {video.isSample ? (
-          <span className="absolute right-3 top-3 rounded-full bg-slate-950/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ring-1 ring-inset ring-white/20 backdrop-blur-sm">
+          <span className="absolute left-2 top-2 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">
             Sample
           </span>
         ) : null}
@@ -40,7 +40,7 @@ export function VideoCard({ video, showActions = true }: VideoCardProps) {
               aria-label={`Play ${video.title}`}
               className="absolute inset-0 flex items-center justify-center"
             >
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 text-indigo-600 shadow-lg transition-transform group-hover:scale-105">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-slate-900 opacity-90 ring-1 ring-black/5 transition-opacity group-hover:opacity-100">
                 <PlayIcon className="ml-0.5 h-5 w-5" />
               </span>
             </Link>
@@ -52,7 +52,7 @@ export function VideoCard({ video, showActions = true }: VideoCardProps) {
               aria-label={`Play ${video.title}`}
               className="absolute inset-0 flex items-center justify-center"
             >
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 text-indigo-600 shadow-lg transition-transform group-hover:scale-105">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-slate-900 opacity-90 ring-1 ring-black/5 transition-opacity group-hover:opacity-100">
                 <PlayIcon className="ml-0.5 h-5 w-5" />
               </span>
             </a>
@@ -63,26 +63,17 @@ export function VideoCard({ video, showActions = true }: VideoCardProps) {
             aria-label={`View progress for ${video.title}`}
             className="absolute inset-0 flex items-center justify-center"
           >
-            <span className="rounded-full bg-slate-950/60 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-inset ring-white/20 backdrop-blur-sm">
+            <span className="rounded-md bg-slate-900/85 px-2.5 py-1 text-xs font-medium tabular-nums text-white">
               {video.progress ?? 0}% · {video.stageLabel ?? "Processing"}
             </span>
           </Link>
-        ) : (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 flex items-center justify-center"
-          >
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 text-white/90 ring-1 ring-inset ring-white/30 backdrop-blur-sm">
-              <PlayIcon className="ml-0.5 h-5 w-5" />
-            </span>
-          </span>
-        )}
+        ) : null}
       </div>
 
       <div className="flex flex-1 flex-col p-4">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={video.status} />
-          <span className="text-xs text-slate-400">{video.subject}</span>
+          <span className="truncate text-xs text-slate-500">{video.subject}</span>
         </div>
 
         <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">

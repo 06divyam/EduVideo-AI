@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   CheckCircleIcon,
   ChevronDownIcon,
-  SettingsIcon,
 } from "@/components/icons";
 
 type Preferences = {
@@ -124,8 +123,8 @@ function Toggle({
         aria-checked={checked}
         aria-labelledby={`${id}-label`}
         onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
-          checked ? "bg-indigo-600" : "bg-slate-300"
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+          checked ? "bg-brand-600" : "bg-slate-300"
         }`}
       >
         <span
@@ -164,20 +163,10 @@ export function SettingsForm() {
 
   return (
     <section className="card p-5 sm:p-6">
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
-          <SettingsIcon className="h-5 w-5" />
-        </span>
-        <div>
-          <h2 className="text-sm font-semibold text-slate-900">
-            Video preferences
-          </h2>
-          <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-            Defaults applied to new lessons. You can still override them on the
-            create page.
-          </p>
-        </div>
-      </div>
+      <h2 className="section-title">Lesson defaults</h2>
+      <p className="hint mt-0.5">
+        Defaults for new lessons. You can still change them on the create page.
+      </p>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <SelectField
@@ -214,7 +203,7 @@ export function SettingsForm() {
         />
       </div>
 
-      <div className="mt-5 space-y-4 border-t border-slate-100 pt-5">
+      <div className="mt-5 space-y-4 border-t border-slate-200 pt-5">
         <Toggle
           id="subtitles"
           label="Burn in subtitles"
@@ -231,17 +220,17 @@ export function SettingsForm() {
         />
       </div>
 
-      <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-xs">
           {saved ? (
             <>
-              <CheckCircleIcon className="h-4 w-4 text-emerald-500" />
-              <span className="font-medium text-emerald-600">
+              <CheckCircleIcon className="h-4 w-4 text-emerald-600" />
+              <span className="font-medium text-emerald-700">
                 Preferences saved locally
               </span>
             </>
           ) : (
-            <span className="text-slate-400">
+            <span className="text-slate-500">
               Changes are stored in this browser only.
             </span>
           )}

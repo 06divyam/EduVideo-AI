@@ -109,7 +109,7 @@ export function VideoLibrary() {
     return (
       <section className="card p-8">
         <div className="flex items-center gap-3 text-sm text-slate-500">
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
           Loading your videos…
         </div>
       </section>
@@ -119,7 +119,7 @@ export function VideoLibrary() {
   if (loadState === "error") {
     return (
       <section className="card p-6">
-        <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
+        <div className="flex items-start gap-3 rounded-md border border-rose-200 bg-rose-50 p-4">
           <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
           <div>
             <p className="text-sm font-semibold text-rose-900">
@@ -147,9 +147,9 @@ export function VideoLibrary() {
   return (
     <div className="space-y-4">
       {videos.some((video) => video.isSample) ? (
-        <div className="flex items-start gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-          <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
-          <p className="text-xs leading-relaxed text-indigo-900">
+        <div className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-3.5">
+          <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+          <p className="text-xs leading-relaxed text-slate-600">
             <span className="font-semibold">Sample previews.</span> These cards
             show the library experience. Playback and downloads unlock after the
             backend renders real MP4 files.
@@ -195,9 +195,9 @@ export function VideoLibrary() {
                   type="button"
                   onClick={() => setStatus(filter.value)}
                   aria-pressed={active}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                     active
-                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/25"
+                      ? "bg-brand-600 text-white"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
                 >

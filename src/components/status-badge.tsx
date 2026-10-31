@@ -12,7 +12,7 @@ const statusStyles: Record<
   processing: {
     label: "Processing",
     className: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20",
-    dot: "bg-amber-500 animate-pulse",
+    dot: "bg-amber-500",
   },
   failed: {
     label: "Failed",

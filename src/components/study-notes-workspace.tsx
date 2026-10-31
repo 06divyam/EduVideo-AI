@@ -162,7 +162,7 @@ export function StudyNotesWorkspace() {
     return (
       <section className="card p-8">
         <div className="flex items-center gap-3 text-sm text-slate-500">
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
           Loading your uploaded lessons…
         </div>
       </section>
@@ -172,7 +172,7 @@ export function StudyNotesWorkspace() {
   if (documentsState === "error") {
     return (
       <section className="card p-6">
-        <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
+        <div className="flex items-start gap-3 rounded-md border border-rose-200 bg-rose-50 p-4">
           <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
           <div>
             <p className="text-sm font-semibold text-rose-900">
@@ -197,10 +197,10 @@ export function StudyNotesWorkspace() {
   if (documents.length === 0) {
     return (
       <section className="card p-8 text-center">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
+        <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-400">
           <BookOpenIcon className="h-6 w-6" />
         </span>
-        <h2 className="mt-4 text-base font-semibold text-slate-900">
+        <h2 className="mt-4 text-sm font-semibold text-slate-900">
           No study material yet
         </h2>
         <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-slate-500">
@@ -235,9 +235,9 @@ export function StudyNotesWorkspace() {
                   type="button"
                   onClick={() => selectDocument(document.document_id)}
                   aria-pressed={active}
-                  className={`w-full rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+                  className={`w-full rounded-md border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                     active
-                      ? "border-indigo-300 bg-indigo-50/70"
+                      ? "border-brand-300 bg-brand-50/70"
                       : "border-transparent hover:border-slate-200 hover:bg-slate-50"
                   }`}
                 >
@@ -245,7 +245,7 @@ export function StudyNotesWorkspace() {
                     <span
                       className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                         active
-                          ? "bg-white text-indigo-600 ring-1 ring-inset ring-indigo-200"
+                          ? "bg-white text-brand-600 ring-1 ring-inset ring-brand-200"
                           : "bg-slate-100 text-slate-500"
                       }`}
                     >
@@ -271,7 +271,7 @@ export function StudyNotesWorkspace() {
                           </span>
                         )}
                         {document.has_quiz ? (
-                          <span className="badge bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700">
+                          <span className="badge bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
                             Quiz ready
                           </span>
                         ) : null}
@@ -303,11 +303,8 @@ export function StudyNotesWorkspace() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
-                  <BookOpenIcon className="h-4 w-4" />
-                </span>
                 <div className="min-w-0">
-                  <h2 className="truncate text-base font-semibold text-slate-900">
+                  <h2 className="truncate text-sm font-semibold text-slate-900">
                     {notes?.notes.title ?? "Smart study notes"}
                   </h2>
                   <p className="truncate text-xs text-slate-500">
@@ -342,7 +339,7 @@ export function StudyNotesWorkspace() {
           {generateError ? (
             <div
               role="alert"
-              className="mt-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3.5"
+              className="mt-4 flex items-start gap-3 rounded-md border border-rose-200 bg-rose-50 p-3.5"
             >
               <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
               <div>
@@ -358,11 +355,11 @@ export function StudyNotesWorkspace() {
 
           {notesState === "loading" ? (
             <div className="mt-6 flex items-center gap-2 text-sm text-slate-500">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
               Loading saved notes…
             </div>
           ) : notesError ? (
-            <div className="mt-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3.5">
+            <div className="mt-4 flex items-start gap-3 rounded-md border border-rose-200 bg-rose-50 p-3.5">
               <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
               <p className="text-xs leading-relaxed text-rose-800">
                 {notesError}
@@ -370,8 +367,8 @@ export function StudyNotesWorkspace() {
             </div>
           ) : notes ? (
             <div className="mt-6 space-y-6">
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-indigo-500">
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-medium text-slate-500">
                   Summary
                 </p>
                 <p className="mt-1.5 text-sm leading-relaxed text-slate-700">
@@ -383,10 +380,10 @@ export function StudyNotesWorkspace() {
                 {notes.notes.topics.map((topic, index) => (
                   <article
                     key={`${topic.name}-${index}`}
-                    className="rounded-2xl border border-slate-200 p-4 sm:p-5"
+                    className="rounded-lg border border-slate-200 p-4 sm:p-5"
                   >
                     <div className="flex items-start gap-3">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-xs font-semibold text-violet-700 ring-1 ring-inset ring-violet-100">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-300 text-xs font-medium tabular-nums text-slate-600">
                         {index + 1}
                       </span>
                       <div className="min-w-0">
@@ -402,7 +399,7 @@ export function StudyNotesWorkspace() {
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       {topic.definitions.length > 0 ? (
                         <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                          <p className="text-xs font-medium text-slate-500">
                             Important definitions
                           </p>
                           <dl className="mt-2 space-y-2">
@@ -422,7 +419,7 @@ export function StudyNotesWorkspace() {
 
                       {topic.examples.length > 0 ? (
                         <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                          <p className="text-xs font-medium text-slate-500">
                             Examples
                           </p>
                           <ul className="mt-2 space-y-1.5">
@@ -441,8 +438,8 @@ export function StudyNotesWorkspace() {
                     </div>
 
                     {topic.key_points.length > 0 ? (
-                      <div className="mt-4 rounded-xl bg-slate-50/70 p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      <div className="mt-4 rounded-md bg-slate-50/70 p-3">
+                        <p className="text-xs font-medium text-slate-500">
                           Key points
                         </p>
                         <ul className="mt-2 space-y-1.5">
@@ -451,7 +448,7 @@ export function StudyNotesWorkspace() {
                               key={`${point}-${pointIndex}`}
                               className="flex items-start gap-2 text-xs leading-relaxed text-slate-600"
                             >
-                              <CheckCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                              <CheckCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
                               {point}
                             </li>
                           ))}
@@ -463,8 +460,8 @@ export function StudyNotesWorkspace() {
               </div>
 
               {notes.notes.revision_notes.length > 0 ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 sm:p-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-600">
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4 sm:p-5">
+                  <p className="text-xs font-medium text-amber-700">
                     Short revision notes
                   </p>
                   <ul className="mt-2 space-y-2">
@@ -481,7 +478,7 @@ export function StudyNotesWorkspace() {
                 </div>
               ) : null}
 
-              <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+              <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
                 <Link
                   href={`/quiz?document=${notes.document_id}`}
                   className="btn-primary"
@@ -498,8 +495,8 @@ export function StudyNotesWorkspace() {
               </div>
             </div>
           ) : (
-            <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-6 text-center">
-              <SparklesIcon className="mx-auto h-6 w-6 text-indigo-500" />
+            <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+              <SparklesIcon className="mx-auto h-6 w-6 text-slate-400" />
               <p className="mt-2 text-sm font-semibold text-slate-900">
                 No study notes for this lesson yet
               </p>

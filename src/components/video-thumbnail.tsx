@@ -1,32 +1,41 @@
 import { formatDuration } from "@/lib/format";
 import type { Video, VideoAccent } from "@/lib/types";
 
-const accentStyles: Record<VideoAccent, string> = {
-  indigo: "from-indigo-700 via-indigo-600 to-blue-500",
-  violet: "from-violet-700 via-purple-600 to-indigo-500",
-  blue: "from-blue-700 via-sky-600 to-cyan-500",
-  emerald: "from-emerald-700 via-teal-600 to-cyan-500",
-  amber: "from-amber-600 via-orange-500 to-rose-500",
-  rose: "from-rose-700 via-pink-600 to-fuchsia-500",
-  cyan: "from-cyan-700 via-sky-600 to-blue-500",
-  slate: "from-slate-800 via-slate-700 to-slate-500",
+// Placeholder thumbnails (samples and videos without a rendered first slide)
+// are neutral; the accent only tints a thin top rule so cards stay calm.
+const accentRules: Record<VideoAccent, string> = {
+  indigo: "bg-brand-500",
+  violet: "bg-brand-400",
+  blue: "bg-sky-600",
+  emerald: "bg-emerald-600",
+  amber: "bg-amber-500",
+  rose: "bg-rose-500",
+  cyan: "bg-cyan-600",
+  slate: "bg-slate-500",
 };
 
-export function VideoThumbnail({ video }: { video: Video }) {
-  const accent = accentStyles[video.accent ?? "indigo"];
+function DurationTag({ seconds }: { seconds: number }) {
+  if (!seconds) {
+    return null;
+  }
+  return (
+    <span className="absolute bottom-2 right-2 rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
+      {formatDuration(seconds)}
+    </span>
+  );
+}
 
+export function VideoThumbnail({ video }: { video: Video }) {
   if (video.thumbnailUrl) {
     // Real first-slide thumbnail rendered by the backend. A CSS background
     // keeps it decorative (the card already shows the title).
     return (
       <div
         aria-hidden="true"
-        className="relative aspect-video w-full overflow-hidden bg-slate-900 bg-cover bg-center"
+        className="relative aspect-video w-full overflow-hidden border-b border-slate-200 bg-slate-100 bg-cover bg-center"
         style={{ backgroundImage: `url("${video.thumbnailUrl}")` }}
       >
-        <span className="absolute bottom-3 right-3 rounded-md bg-black/40 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
-          {formatDuration(video.durationSeconds)}
-        </span>
+        <DurationTag seconds={video.durationSeconds} />
       </div>
     );
   }
@@ -34,30 +43,18 @@ export function VideoThumbnail({ video }: { video: Video }) {
   return (
     <div
       aria-hidden="true"
-      className={`relative aspect-video w-full overflow-hidden bg-gradient-to-br ${accent}`}
+      className="relative aspect-video w-full overflow-hidden border-b border-slate-200 bg-slate-50"
     >
-      <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/10" />
-      <div className="absolute -bottom-12 -left-8 h-36 w-36 rounded-full bg-white/10" />
-      <div className="absolute right-10 top-8 h-2 w-2 rounded-full bg-white/40" />
-      <div className="absolute right-16 top-12 h-1.5 w-1.5 rounded-full bg-white/30" />
-
-      <div className="relative flex h-full flex-col justify-between p-4">
-        <span className="w-fit rounded-md bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/90 ring-1 ring-inset ring-white/20">
+      <span className={`absolute inset-x-0 top-0 h-0.5 ${accentRules[video.accent ?? "slate"]}`} />
+      <div className="flex h-full flex-col justify-end p-4">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
           {video.subject ?? "Lesson"}
-        </span>
-        <div>
-          <p className="line-clamp-2 text-sm font-semibold leading-snug text-white drop-shadow-sm">
-            {video.title}
-          </p>
-          <p className="mt-1 text-[11px] font-medium text-white/60">
-            EduVideo AI lesson
-          </p>
-        </div>
+        </p>
+        <p className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-slate-700">
+          {video.title}
+        </p>
       </div>
-
-      <span className="absolute bottom-3 right-3 rounded-md bg-black/40 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
-        {formatDuration(video.durationSeconds)}
-      </span>
+      <DurationTag seconds={video.durationSeconds} />
     </div>
   );
 }

@@ -4,6 +4,11 @@ Renders one 16:9 PNG per lesson scene in one of three styles that match the
 Create Video form: "illustrated", "classroom", and "minimal". Text is
 wrapped and shrunk to fit, so any script produces a readable slide.
 
+All styles share the app's neutral palette (same values as the frontend
+tokens in src/app/globals.css): light backgrounds, charcoal text, grey
+borders, and one muted slate-blue accent. Styles differ only in a single
+quiet decoration, so slides stay readable in the final MP4.
+
 Latin-script languages render with standard system fonts. Devanagari (Hindi)
 and Arabic need complex text shaping, which Pillow only provides when
 libraqm is installed; without it those languages are rejected up front
@@ -59,6 +64,19 @@ class SlideServiceError(Exception):
         self.status_code = status_code
 
 
+# Palette shared with the frontend design tokens (RGB).
+OFF_WHITE = (247, 247, 248)  # page background  #f7f7f8
+WHITE = (255, 255, 255)
+CHARCOAL = (28, 32, 36)  # headings          #1c2024
+BODY = (55, 62, 71)  # body text          #373e47
+MUTED = (100, 108, 120)  # secondary text     #646c78
+BORDER = (226, 232, 240)  # dividers/tracks    #e2e8f0
+BRAND_50 = (242, 245, 249)
+BRAND_100 = (227, 233, 241)
+BRAND_600 = (64, 92, 127)  # accent             #405c7f
+BRAND_700 = (53, 75, 104)
+
+
 @dataclass(frozen=True)
 class Theme:
     background_top: tuple[int, int, int]
@@ -68,42 +86,49 @@ class Theme:
     muted: tuple[int, int, int]
     accent: tuple[int, int, int]
     chip_fill: tuple[int, int, int, int]
+    chip_text: tuple[int, int, int]
     track: tuple[int, int, int, int]
-    decoration: str  # "circles" | "chalkboard" | "bar"
+    decoration: str  # "shapes" | "board" | "bar"
 
 
 THEMES = {
+    # Off-white with one large, very pale accent circle.
     "illustrated": Theme(
-        background_top=(49, 46, 129),
-        background_bottom=(91, 33, 182),
-        heading=(255, 255, 255),
-        body=(224, 231, 255),
-        muted=(165, 180, 252),
-        accent=(129, 140, 248),
-        chip_fill=(255, 255, 255, 38),
-        track=(255, 255, 255, 51),
-        decoration="circles",
+        background_top=OFF_WHITE,
+        background_bottom=OFF_WHITE,
+        heading=CHARCOAL,
+        body=BODY,
+        muted=MUTED,
+        accent=BRAND_600,
+        chip_fill=(*BRAND_100, 255),
+        chip_text=BRAND_700,
+        track=(*BORDER, 255),
+        decoration="shapes",
     ),
+    # White "whiteboard" with a thin grey frame.
     "classroom": Theme(
-        background_top=(30, 61, 51),
-        background_bottom=(22, 48, 40),
-        heading=(250, 250, 240),
-        body=(226, 232, 220),
-        muted=(167, 196, 176),
-        accent=(250, 204, 21),
-        chip_fill=(255, 255, 255, 30),
-        track=(255, 255, 255, 40),
-        decoration="chalkboard",
+        background_top=WHITE,
+        background_bottom=WHITE,
+        heading=CHARCOAL,
+        body=BODY,
+        muted=MUTED,
+        accent=BRAND_600,
+        chip_fill=(241, 243, 245, 255),
+        chip_text=BODY,
+        track=(*BORDER, 255),
+        decoration="board",
     ),
+    # Plain white with an accent bar on the leading edge.
     "minimal": Theme(
-        background_top=(255, 255, 255),
-        background_bottom=(248, 250, 252),
-        heading=(15, 23, 42),
-        body=(51, 65, 85),
-        muted=(100, 116, 139),
-        accent=(79, 70, 229),
-        chip_fill=(238, 242, 255, 255),
-        track=(226, 232, 240, 255),
+        background_top=WHITE,
+        background_bottom=WHITE,
+        heading=CHARCOAL,
+        body=BODY,
+        muted=MUTED,
+        accent=BRAND_600,
+        chip_fill=(*BRAND_50, 255),
+        chip_text=BRAND_700,
+        track=(*BORDER, 255),
         decoration="bar",
     ),
 }
@@ -177,6 +202,8 @@ def _wrap(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
 
 
 def _gradient(theme: Theme) -> Image.Image:
+    if theme.background_top == theme.background_bottom:
+        return Image.new("RGB", (SLIDE_WIDTH, SLIDE_HEIGHT), theme.background_top)
     top = Image.new("RGB", (SLIDE_WIDTH, SLIDE_HEIGHT), theme.background_top)
     bottom = Image.new("RGB", (SLIDE_WIDTH, SLIDE_HEIGHT), theme.background_bottom)
     mask = Image.linear_gradient("L").resize((SLIDE_WIDTH, SLIDE_HEIGHT))
@@ -187,16 +214,15 @@ def _decorate(image: Image.Image, theme: Theme) -> None:
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
-    if theme.decoration == "circles":
-        draw.ellipse((980, -160, 1420, 280), fill=(255, 255, 255, 22))
-        draw.ellipse((-140, 470, 260, 870), fill=(255, 255, 255, 18))
-        draw.ellipse((1150, 120, 1166, 136), fill=(255, 255, 255, 90))
-        draw.ellipse((1190, 170, 1201, 181), fill=(255, 255, 255, 70))
-    elif theme.decoration == "chalkboard":
-        draw.rectangle((0, 0, SLIDE_WIDTH - 1, SLIDE_HEIGHT - 1), outline=(120, 82, 45, 255), width=18)
-        draw.rectangle((18, 18, SLIDE_WIDTH - 19, SLIDE_HEIGHT - 19), outline=(0, 0, 0, 60), width=3)
+    if theme.decoration == "shapes":
+        # One soft circle bleeding off the top-right corner, kept well clear
+        # of the text column.
+        draw.ellipse((1010, -190, 1450, 250), fill=(*BRAND_50, 255))
+        draw.ellipse((1010, -190, 1450, 250), outline=(*BRAND_100, 255), width=2)
+    elif theme.decoration == "board":
+        draw.rectangle((16, 16, SLIDE_WIDTH - 17, SLIDE_HEIGHT - 17), outline=(*BORDER, 255), width=2)
     elif theme.decoration == "bar":
-        draw.rectangle((0, 0, 14, SLIDE_HEIGHT), fill=(*theme.accent, 255))
+        draw.rectangle((0, 0, 10, SLIDE_HEIGHT), fill=(*theme.accent, 255))
 
     image.paste(overlay, (0, 0), overlay)
 
@@ -238,7 +264,7 @@ def render_slide(
     chip_width = int(chip_font.getlength(chip_text)) + 32
     chip_x = margin_x if not rtl else SLIDE_WIDTH - margin_x - chip_width
     draw.rounded_rectangle((chip_x, 64, chip_x + chip_width, 102), radius=10, fill=theme.chip_fill)
-    draw.text((chip_x + 16, 72), chip_text, font=chip_font, fill=theme.muted, direction=direction)
+    draw.text((chip_x + 16, 72), chip_text, font=chip_font, fill=theme.chip_text, direction=direction)
 
     y = 140
     if is_intro:

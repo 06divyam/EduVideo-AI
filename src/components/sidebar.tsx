@@ -21,10 +21,10 @@ type NavItem = {
 
 const mainNavItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: DashboardIcon },
-  { href: "/create", label: "Create Video", icon: PlusCircleIcon },
-  { href: "/study", label: "Study Notes", icon: BookOpenIcon },
+  { href: "/create", label: "Create video", icon: PlusCircleIcon },
+  { href: "/study", label: "Study notes", icon: BookOpenIcon },
   { href: "/quiz", label: "Quizzes", icon: QuizIcon },
-  { href: "/videos", label: "My Videos", icon: VideoIcon },
+  { href: "/videos", label: "My videos", icon: VideoIcon },
 ];
 
 const secondaryNavItems: NavItem[] = [
@@ -40,17 +40,12 @@ function isActive(pathname: string | null, href: string) {
 
 function Brand() {
   return (
-    <Link href="/" className="flex items-center gap-3">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-900/40">
-        <LogoIcon className="h-5 w-5" />
+    <Link href="/" className="flex items-center gap-2.5">
+      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-900 text-white">
+        <LogoIcon className="h-4 w-4" />
       </span>
-      <span className="leading-tight">
-        <span className="block text-[15px] font-semibold tracking-tight text-white">
-          EduVideo AI
-        </span>
-        <span className="block text-xs text-slate-400">
-          Turn notes into knowledge
-        </span>
+      <span className="text-sm font-semibold tracking-tight text-slate-900">
+        EduVideo AI
       </span>
     </Link>
   );
@@ -101,22 +96,15 @@ function NavList({
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={[
-              "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-colors",
-              compact ? "whitespace-nowrap px-3 py-2" : "px-3 py-2.5",
+              "flex items-center gap-2.5 rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+              compact ? "whitespace-nowrap px-2.5 py-1.5" : "px-2.5 py-1.5",
               active
-                ? "bg-white/10 text-white ring-1 ring-inset ring-white/10"
-                : "text-slate-400 hover:bg-white/5 hover:text-white",
+                ? "bg-slate-100 font-medium text-slate-900"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
             ].join(" ")}
           >
-            {active && !compact ? (
-              <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-indigo-400 to-violet-500" />
-            ) : null}
             <Icon
-              className={`h-[18px] w-[18px] ${
-                active
-                  ? "text-indigo-300"
-                  : "text-slate-500 group-hover:text-slate-300"
-              }`}
+              className={`h-4 w-4 ${active ? "text-brand-600" : "text-slate-400"}`}
             />
             {item.label}
           </Link>
@@ -129,48 +117,31 @@ function NavList({
 export function Sidebar() {
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col overflow-y-auto border-r border-white/10 bg-[#0b1226] px-5 py-6 lg:flex">
-        <Brand />
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-slate-200 bg-white px-3 py-4 lg:flex">
+        <div className="px-2.5">
+          <Brand />
+        </div>
 
-        <Link
-          href="/create"
-          className="mt-8 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1226]"
-        >
-          <PlusCircleIcon className="h-[18px] w-[18px]" />
+        <Link href="/create" className="btn-primary mx-1 mt-5">
+          <PlusCircleIcon className="h-4 w-4" />
           New video
         </Link>
 
-        <p className="mt-8 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-          Workspace
-        </p>
-        <div className="mt-2">
+        <div className="mt-5">
           <NavLinks items={mainNavItems} />
         </div>
 
-        <div className="mt-6 border-t border-white/10 pt-4">
+        <div className="mt-auto border-t border-slate-200 pt-3">
           <NavLinks items={secondaryNavItems} />
-        </div>
-
-        <div className="mt-auto rounded-2xl bg-white/5 p-4 ring-1 ring-inset ring-white/10">
-          <p className="flex items-center gap-2 text-xs font-semibold text-indigo-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
-            Education track
-          </p>
-          <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
-            Turn a PDF into study notes, a timed quiz, and a narrated lesson.
-          </p>
         </div>
       </aside>
 
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b1226]/95 backdrop-blur lg:hidden">
-        <div className="flex items-center justify-between px-4 py-3">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white lg:hidden">
+        <div className="flex items-center justify-between px-4 py-2.5">
           <Brand />
-          <Link
-            href="/create"
-            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 px-3 py-2 text-xs font-semibold text-white"
-          >
+          <Link href="/create" className="btn-primary px-3 py-1.5 text-xs">
             <PlusCircleIcon className="h-4 w-4" />
-            New
+            New video
           </Link>
         </div>
         <div className="px-2 pb-2">

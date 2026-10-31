@@ -10,7 +10,6 @@ export default function VideoDetailPage({ params }: PageProps<"/videos/[videoId]
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="My Videos"
         title="Lesson video"
         description="Watch the narrated lesson with captions, download the MP4, or turn the same PDF into a quiz."
         action={
@@ -37,7 +36,7 @@ function LoadingCard() {
   return (
     <section className="card p-8">
       <div className="flex items-center gap-3 text-sm text-slate-500">
-        <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
         Loading video…
       </div>
     </section>

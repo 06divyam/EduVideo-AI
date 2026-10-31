@@ -95,7 +95,7 @@ export function VideoPlayer({ videoId }: { videoId: string }) {
   if (!job) {
     return loadError ? (
       <section className="card p-6">
-        <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
+        <div className="flex items-start gap-3 rounded-md border border-rose-200 bg-rose-50 p-4">
           <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
           <div>
             <p className="text-sm font-semibold text-rose-900">
@@ -113,7 +113,7 @@ export function VideoPlayer({ videoId }: { videoId: string }) {
     ) : (
       <section className="card p-8">
         <div className="flex items-center gap-3 text-sm text-slate-500">
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
           Loading video…
         </div>
       </section>
@@ -154,36 +154,44 @@ export function VideoPlayer({ videoId }: { videoId: string }) {
               Your browser cannot play this video. Use the download button instead.
             </video>
           ) : (
-            <div className="relative flex aspect-video w-full flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-950 p-6 text-center text-white">
+            <div className="flex aspect-video w-full flex-col items-center justify-center gap-4 border-b border-slate-200 bg-slate-50 p-6 text-center">
               {job.status === "failed" ? (
-                <>
-                  <AlertTriangleIcon className="h-10 w-10 text-rose-300" />
-                  <div>
-                    <p className="text-base font-semibold">Generation failed</p>
-                    <p className="mt-1 max-w-md text-sm text-rose-100/90">
-                      {job.error_message ?? "The video could not be generated."}
-                    </p>
-                  </div>
-                </>
+                <div role="alert" className="flex max-w-md flex-col items-center">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                    <AlertTriangleIcon className="h-5 w-5" />
+                  </span>
+                  <p className="mt-3 text-sm font-semibold text-slate-900">
+                    Generation failed
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-rose-700">
+                    {job.error_message ?? "The video could not be generated."}
+                  </p>
+                </div>
               ) : (
-                <>
-                  <span className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white" />
-                  <div aria-live="polite">
-                    <p className="text-base font-semibold">
+                <div aria-live="polite" className="w-full max-w-sm">
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <p className="font-medium text-slate-900">
                       {videoStageLabels[job.stage] ?? "Processing"}…
                     </p>
-                    <p className="mt-1 text-sm text-indigo-200">
-                      {job.progress}% complete. You can leave this page; the
-                      video keeps generating.
-                    </p>
+                    <p className="tabular-nums text-slate-500">{job.progress}%</p>
                   </div>
-                  <div className="h-1.5 w-2/3 max-w-sm overflow-hidden rounded-full bg-white/20">
+                  <div
+                    className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={job.progress}
+                    aria-label="Video generation progress"
+                  >
                     <div
-                      className="h-1.5 rounded-full bg-gradient-to-r from-indigo-400 to-violet-400 transition-all duration-500"
+                      className="h-1.5 rounded-full bg-brand-600 transition-[width] duration-500"
                       style={{ width: `${job.progress}%` }}
                     />
                   </div>
-                </>
+                  <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                    You can leave this page; the video keeps generating.
+                  </p>
+                </div>
               )}
             </div>
           )}
@@ -193,10 +201,10 @@ export function VideoPlayer({ videoId }: { videoId: string }) {
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={status} />
                 {job.subject ? (
-                  <span className="text-xs text-slate-400">{job.subject}</span>
+                  <span className="text-xs text-slate-500">{job.subject}</span>
                 ) : null}
               </div>
-              <h2 className="mt-2 text-lg font-semibold leading-snug text-slate-900">
+              <h2 className="mt-2 text-base font-semibold leading-snug text-slate-900">
                 {title}
               </h2>
               <p className="mt-1 text-xs text-slate-500">
@@ -233,21 +241,18 @@ export function VideoPlayer({ videoId }: { videoId: string }) {
 
         {job.scenes.length > 0 ? (
           <section className="card p-5 sm:p-6">
-            <h2 className="text-sm font-semibold text-slate-900">
+            <h2 className="section-title">
               Lesson outline
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
               {job.scenes.length} scenes written by Gemini from{" "}
               {job.document_filename ?? "your PDF"}.
             </p>
-            <ol className="mt-4 space-y-3">
+            <ol className="mt-4 divide-y divide-slate-200 border-t border-slate-200">
               {job.scenes.map((scene, index) => (
-                <li
-                  key={`${index}-${scene.heading}`}
-                  className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5"
-                >
+                <li key={`${index}-${scene.heading}`} className="py-3.5">
                   <p className="text-sm font-semibold text-slate-900">
-                    <span className="mr-2 text-xs font-semibold text-indigo-600">
+                    <span className="mr-2 text-xs font-medium tabular-nums text-slate-400">
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     {scene.heading}
@@ -258,7 +263,7 @@ export function VideoPlayer({ videoId }: { videoId: string }) {
                         key={bullet}
                         className="flex items-start gap-2 text-xs leading-relaxed text-slate-600"
                       >
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
+                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
                         {bullet}
                       </li>
                     ))}
@@ -272,8 +277,8 @@ export function VideoPlayer({ videoId }: { videoId: string }) {
 
       <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
         <section className="card p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Pipeline</h2>
-          <ol className="mt-4 space-y-3">
+          <h2 className="section-title">Progress</h2>
+          <ol className="mt-3 space-y-2.5">
             {stages.map((stage, index) => {
               const Icon = stage.icon;
               const done =
@@ -284,18 +289,18 @@ export function VideoPlayer({ videoId }: { videoId: string }) {
               return (
                 <li key={stage.key} className="flex items-center gap-3 text-sm">
                   <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg ring-1 ring-inset ${
+                    className={`flex h-7 w-7 items-center justify-center rounded-full border ${
                       done
-                        ? "bg-emerald-50 text-emerald-600 ring-emerald-100"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-600"
                         : active
-                          ? "bg-indigo-50 text-indigo-600 ring-indigo-100"
-                          : "bg-slate-50 text-slate-400 ring-slate-200"
+                          ? "border-brand-300 bg-brand-50 text-brand-700"
+                          : "border-slate-200 bg-white text-slate-400"
                     }`}
                   >
                     {done ? (
-                      <CheckCircleIcon className="h-4 w-4" />
+                      <CheckCircleIcon className="h-3.5 w-3.5" />
                     ) : (
-                      <Icon className={`h-4 w-4 ${active ? "animate-pulse" : ""}`} />
+                      <Icon className="h-3.5 w-3.5" />
                     )}
                   </span>
                   <span
@@ -312,8 +317,8 @@ export function VideoPlayer({ videoId }: { videoId: string }) {
         </section>
 
         <section className="card p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Settings</h2>
-          <dl className="mt-4 space-y-3 text-sm">
+          <h2 className="section-title">Details</h2>
+          <dl className="mt-3 space-y-2.5 text-sm">
             {[
               ["Source", job.document_filename ?? "PDF"],
               ["Level", levelLabels[job.level] ?? job.level],

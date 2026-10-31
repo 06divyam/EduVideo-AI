@@ -131,7 +131,7 @@ export function QuizHub() {
     return (
       <section className="card p-8">
         <div className="flex items-center gap-3 text-sm text-slate-500">
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
           Loading quizzes and lessons…
         </div>
       </section>
@@ -141,7 +141,7 @@ export function QuizHub() {
   if (state === "error") {
     return (
       <section className="card p-6">
-        <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
+        <div className="flex items-start gap-3 rounded-md border border-rose-200 bg-rose-50 p-4">
           <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
           <div>
             <p className="text-sm font-semibold text-rose-900">
@@ -172,9 +172,6 @@ export function QuizHub() {
       <div className="space-y-6">
         <section className="card p-5 sm:p-6">
           <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600 ring-1 ring-inset ring-violet-100">
-              <QuizIcon className="h-5 w-5" />
-            </span>
             <div>
               <h2 className="text-sm font-semibold text-slate-900">
                 Create an exam
@@ -187,8 +184,8 @@ export function QuizHub() {
           </div>
 
           {documents.length === 0 ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-6 text-center">
-              <BookOpenIcon className="mx-auto h-6 w-6 text-indigo-500" />
+            <div className="mt-5 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+              <BookOpenIcon className="mx-auto h-6 w-6 text-slate-400" />
               <p className="mt-2 text-sm font-semibold text-slate-900">
                 Upload a PDF first
               </p>
@@ -244,7 +241,7 @@ export function QuizHub() {
                   {[5, 6, 7, 8, 9, 10].map((count) => (
                     <label
                       key={count}
-                      className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2"
+                      className="option px-4 py-2 text-sm font-semibold text-slate-700"
                     >
                       <input
                         type="radio"
@@ -266,7 +263,7 @@ export function QuizHub() {
                   {difficultyOptions.map((option) => (
                     <label
                       key={option.value}
-                      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/70 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2"
+                      className="option p-3"
                     >
                       <input
                         type="radio"
@@ -287,7 +284,7 @@ export function QuizHub() {
                 </div>
               </fieldset>
 
-              <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <p className="flex items-center gap-1.5 text-xs text-slate-500">
                   <ClockIcon className="h-3.5 w-3.5" />
                   Timed exam · {questionCount * 60} seconds
@@ -315,7 +312,7 @@ export function QuizHub() {
               {generateError ? (
                 <div
                   role="alert"
-                  className="mt-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3.5"
+                  className="mt-4 flex items-start gap-3 rounded-md border border-rose-200 bg-rose-50 p-3.5"
                 >
                   <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
                   <div>
@@ -333,9 +330,9 @@ export function QuizHub() {
         </section>
 
         <section className="card overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900">
                 Recent quizzes
               </h2>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -358,7 +355,7 @@ export function QuizHub() {
               </p>
             </div>
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-slate-200">
               {quizzes.map((quiz) => (
                 <li
                   key={quiz.quiz_id}
@@ -396,19 +393,19 @@ export function QuizHub() {
           <h2 className="text-sm font-semibold text-slate-900">Exam rules</h2>
           <ul className="mt-3 space-y-2 text-xs leading-relaxed text-slate-600">
             <li className="flex items-start gap-2">
-              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-indigo-500" />
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
               Answers are hidden until you submit the exam.
             </li>
             <li className="flex items-start gap-2">
-              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-indigo-500" />
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
               The timer submits automatically when it reaches zero.
             </li>
             <li className="flex items-start gap-2">
-              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-indigo-500" />
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
               Every question includes an explanation after submission.
             </li>
             <li className="flex items-start gap-2">
-              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-indigo-500" />
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
               Weak topics are tracked from your incorrect answers.
             </li>
           </ul>
@@ -423,7 +420,7 @@ export function QuizHub() {
           </p>
           <Link
             href="/study"
-            className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-500"
+            className="link mt-3 text-xs"
           >
             Open study notes
           </Link>

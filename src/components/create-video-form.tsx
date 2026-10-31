@@ -9,22 +9,14 @@ import {
   type ChangeEvent,
   type DragEvent,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import {
   AlertTriangleIcon,
-  ArrowRightIcon,
   CheckCircleIcon,
   ChevronDownIcon,
   FileTextIcon,
-  ImageIcon,
-  InfoIcon,
-  LayersIcon,
-  MicIcon,
-  PlayIcon,
-  PresentationIcon,
-  SparklesIcon,
   UploadIcon,
-  VideoIcon,
   XIcon,
 } from "@/components/icons";
 import {
@@ -105,57 +97,28 @@ const durations = [
 const styles = [
   {
     value: "illustrated",
-    label: "Illustrated Slides",
-    description: "Colorful slides with friendly shapes",
-    icon: ImageIcon,
+    label: "Illustrated",
+    description: "Slides with simple shapes",
   },
   {
     value: "classroom",
     label: "Classroom",
-    description: "Structured chalkboard-style lesson",
-    icon: PresentationIcon,
+    description: "Chalkboard-style layout",
   },
   {
     value: "minimal",
     label: "Minimal",
-    description: "Clean, type-first slides",
-    icon: LayersIcon,
+    description: "Type-first, no decoration",
   },
 ];
 
-const pipeline = [
-  {
-    title: "Source",
-    description: "PDF text is extracted or notes are cleaned.",
-    icon: FileTextIcon,
-  },
-  {
-    title: "Script",
-    description: "Gemini writes a beginner-friendly lesson.",
-    icon: SparklesIcon,
-  },
-  {
-    title: "Narration",
-    description: "Murf TTS voices the whole lesson.",
-    icon: MicIcon,
-  },
-  {
-    title: "Slides",
-    description: "Pillow renders the lesson visuals.",
-    icon: ImageIcon,
-  },
-  {
-    title: "MP4",
-    description: "FFmpeg combines slides and narration, with captions.",
-    icon: VideoIcon,
-  },
-];
-
-const deliverables = [
-  "Scene-by-scene lesson outline",
-  "Narrated voiceover with captions",
-  "Downloadable MP4 lesson video",
-  "A timed quiz from the same PDF",
+// What the backend does after "Generate video" (shown in the sidebar).
+const pipelineSteps = [
+  "Extract text from the PDF",
+  "Gemini writes the lesson script",
+  "Murf narrates the whole lesson",
+  "Slides are rendered and timed to the narration",
+  "FFmpeg builds the MP4 with captions",
 ];
 
 function validatePdf(file: File) {
@@ -382,168 +345,172 @@ export function CreateVideoForm() {
     }
   }
 
+  const notesLength = notes.trim().length;
+
   return (
-    <div className="space-y-6">
-      <form
-        onSubmit={handleSubmit}
-        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
-      >
-        <div className="space-y-6">
-          <section className="card p-5 sm:p-6">
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
-                <FileTextIcon className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Source material
-                </h2>
-                <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                  Upload a PDF, paste notes, or use both for extra context.
-                </p>
-              </div>
-            </div>
+    <form
+      onSubmit={handleSubmit}
+      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]"
+    >
+      <div className="space-y-4">
+        {/* Step 1: source */}
+        <section className="card p-5 sm:p-6" aria-labelledby="source-heading">
+          <StepHeading number={1} id="source-heading" title="Upload a PDF">
+            Lecture notes, textbook chapters, and study guides work best.
+          </StepHeading>
 
-            <div
-              onDragEnter={handleDragOver}
-              onDragOver={handleDragOver}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-              className={`mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-9 text-center transition-colors ${
-                isDragging
-                  ? "border-indigo-500 bg-indigo-50"
-                  : "border-slate-300 bg-slate-50/60 hover:border-indigo-400 hover:bg-indigo-50/40"
-              }`}
-            >
-              <input
-                ref={fileInputRef}
-                id="pdf-upload"
-                type="file"
-                accept="application/pdf,.pdf"
-                aria-label="Upload a PDF file"
-                tabIndex={-1}
-                onChange={handleFileChange}
-                className="sr-only"
-              />
+          <div
+            onDragEnter={handleDragOver}
+            onDragOver={handleDragOver}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            className={`mt-4 rounded-lg border border-dashed transition-colors ${
+              isDragging
+                ? "border-brand-500 bg-brand-50"
+                : file
+                  ? "border-slate-200 bg-white"
+                  : "border-slate-300 bg-slate-50 hover:border-slate-400"
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              id="pdf-upload"
+              type="file"
+              accept="application/pdf,.pdf"
+              aria-label="Upload a PDF file"
+              tabIndex={-1}
+              onChange={handleFileChange}
+              className="sr-only"
+            />
 
-              {file ? (
-                <div className="w-full max-w-md">
-                  <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
-                      <FileTextIcon className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-900">
-                        {file.name}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {formatFileSize(file.size)} ·{" "}
-                        {status === "loading"
-                          ? progress === 100
-                            ? "Extracting text..."
-                            : `Uploading ${progress}%`
-                          : document
-                            ? "PDF extracted"
-                            : "PDF ready"}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={clearFile}
-                      disabled={busy}
-                      aria-label="Remove selected PDF"
-                      className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <XIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {status === "loading" ? (
-                    <div className="mt-3" aria-live="polite">
-                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
-                        <div
-                          className="h-1.5 rounded-full bg-indigo-600 transition-all duration-200"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                      <p className="mt-1.5 text-right text-[11px] text-slate-500">
-                        {progress}%
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-xs text-slate-500">
-                      {document
-                        ? "Extracted text is shown below. Drop another PDF to replace it."
-                        : "Drop another PDF to replace it, or remove it to paste notes."}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
-                    <UploadIcon className="h-6 w-6" />
+            {file ? (
+              <div className="p-3 sm:p-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-500">
+                    <FileTextIcon className="h-4 w-4" />
                   </span>
-                  <p className="mt-4 text-sm font-semibold text-slate-900">
-                    Drag and drop your PDF here
-                  </p>
-                  <p className="mt-1 max-w-sm text-xs leading-relaxed text-slate-500">
-                    PDF only, up to 20 MB. Lecture notes, textbook chapters, and
-                    study guides work best.
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-900">
+                      {file.name}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {formatFileSize(file.size)} ·{" "}
+                      {status === "loading" ? (
+                        progress === 100 ? (
+                          "Extracting text…"
+                        ) : (
+                          `Uploading ${progress}%`
+                        )
+                      ) : document ? (
+                        <span className="text-emerald-700">Text extracted</span>
+                      ) : (
+                        "Ready to upload"
+                      )}
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="btn-secondary mt-4"
+                    disabled={busy}
+                    className="btn-ghost px-2.5 py-1.5 text-xs"
                   >
-                    <UploadIcon className="h-4 w-4" />
-                    Browse Files
+                    Replace
                   </button>
-                </>
-              )}
-            </div>
+                  <button
+                    type="button"
+                    onClick={clearFile}
+                    disabled={busy}
+                    aria-label="Remove selected PDF"
+                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <XIcon className="h-4 w-4" />
+                  </button>
+                </div>
+                {status === "loading" ? (
+                  <div
+                    className="mt-3 h-1 overflow-hidden rounded-full bg-slate-200"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={progress}
+                    aria-label="Upload progress"
+                  >
+                    <div
+                      className="h-1 rounded-full bg-brand-600 transition-[width] duration-200"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center px-6 py-10 text-center">
+                <UploadIcon className="h-6 w-6 text-slate-400" />
+                <p className="mt-3 text-sm font-medium text-slate-900">
+                  Drop a PDF here, or
+                </p>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn-primary mt-3"
+                >
+                  Choose file
+                </button>
+                <p className="mt-3 text-xs text-slate-500">PDF only, up to 20 MB</p>
+              </div>
+            )}
+          </div>
 
-            {fileError ? (
-              <p
-                role="alert"
-                className="mt-2 flex items-center gap-1.5 text-xs font-medium text-rose-600"
-              >
-                <AlertTriangleIcon className="h-3.5 w-3.5" />
-                {fileError}
-              </p>
-            ) : null}
+          {fileError ? <FieldError>{fileError}</FieldError> : null}
 
-            <div className="my-6 flex items-center gap-3">
-              <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                or
-              </span>
-              <div className="h-px flex-1 bg-slate-200" />
-            </div>
+          {document ? (
+            <details className="disclosure mt-3 rounded-md border border-slate-200">
+              <summary className="px-3.5 py-2.5 text-sm">
+                <span className="text-slate-700">
+                  Extracted text
+                  <span className="ml-2 text-xs text-slate-500">
+                    {document.page_count}{" "}
+                    {document.page_count === 1 ? "page" : "pages"} ·{" "}
+                    {document.text_length.toLocaleString()} characters
+                  </span>
+                </span>
+                <ChevronDownIcon className="disclosure-chevron h-4 w-4 text-slate-400 transition-transform" />
+              </summary>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words border-t border-slate-200 bg-slate-50 px-3.5 py-3 font-mono text-[11px] leading-relaxed text-slate-600">
+                {document.text}
+              </pre>
+            </details>
+          ) : null}
 
-            <div>
+          <details className="disclosure mt-3">
+            <summary className="py-1 text-sm text-slate-600 hover:text-slate-900">
+              <span>Or paste notes instead</span>
+              <ChevronDownIcon className="disclosure-chevron h-4 w-4 text-slate-400 transition-transform" />
+            </summary>
+            <div className="mt-2">
               <div className="flex items-center justify-between gap-3">
                 <label htmlFor="notes" className="label">
-                  Paste your notes
+                  Notes
                 </label>
                 <span
-                  className={`text-xs ${
-                    notes.trim().length >= MIN_NOTES_LENGTH
-                      ? "text-emerald-600"
+                  className={`text-xs tabular-nums ${
+                    notesLength >= MIN_NOTES_LENGTH
+                      ? "text-emerald-700"
                       : "text-slate-400"
                   }`}
                 >
-                  {notes.trim().length} characters
+                  {notesLength} / {MIN_NOTES_LENGTH} min
                 </span>
               </div>
-              <p className="hint mt-1">
-                Use this instead of a PDF, or add extra context. Minimum{" "}
-                {MIN_NOTES_LENGTH} characters.
+              <p className="hint mt-0.5">
+                Video generation currently needs a PDF; notes alone are not
+                supported yet.
               </p>
               <textarea
                 id="notes"
                 value={notes}
                 onChange={handleNotesChange}
-                rows={6}
-                placeholder="Paste a summary, lecture notes, or the key concepts you want the lesson to cover..."
+                rows={5}
+                placeholder="Paste a summary, lecture notes, or the key concepts to cover…"
                 aria-invalid={Boolean(sourceError)}
                 aria-describedby={sourceError ? "notes-error" : undefined}
                 className={`input mt-2 resize-y ${
@@ -552,103 +519,95 @@ export function CreateVideoForm() {
                     : ""
                 }`}
               />
-              {sourceError ? (
-                <p
-                  id="notes-error"
-                  role="alert"
-                  className="mt-2 flex items-center gap-1.5 text-xs font-medium text-rose-600"
-                >
-                  <AlertTriangleIcon className="h-3.5 w-3.5" />
-                  {sourceError}
-                </p>
-              ) : null}
             </div>
-          </section>
+          </details>
 
-          {document ? (
-            <section className="card p-5 sm:p-6">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-100">
-                    <FileTextIcon className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-900">
-                      Extracted text
-                    </h2>
-                    <p className="mt-0.5 truncate text-xs text-slate-500">
-                      {document.filename}
-                    </p>
-                  </div>
-                </div>
-                <span className="badge w-fit bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/15">
-                  PDF processed
-                </span>
-              </div>
-
-              <dl className="mt-4 grid grid-cols-3 gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-xs">
-                <div>
-                  <dt className="text-slate-500">Pages</dt>
-                  <dd className="mt-0.5 text-sm font-semibold text-slate-900">
-                    {document.page_count}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Characters</dt>
-                  <dd className="mt-0.5 text-sm font-semibold text-slate-900">
-                    {document.text_length.toLocaleString()}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">File size</dt>
-                  <dd className="mt-0.5 text-sm font-semibold text-slate-900">
-                    {formatFileSize(document.size_bytes)}
-                  </dd>
-                </div>
-              </dl>
-
-              <div className="mt-4 rounded-xl border border-slate-200 p-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Preview
-                </p>
-                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-slate-600">
-                  {document.text}
-                </pre>
-              </div>
-
-              <p className="mt-3 text-[11px] text-slate-400">
-                Document {document.document_id.slice(0, 8)}… is stored in the
-                backend and used for the lesson video.
-              </p>
-            </section>
+          {sourceError ? (
+            <FieldError id="notes-error">{sourceError}</FieldError>
           ) : null}
+        </section>
 
-          <section className="card p-5 sm:p-6">
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600 ring-1 ring-inset ring-violet-100">
-                <SparklesIcon className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Lesson settings
-                </h2>
-                <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                  Shape the tone, pace, and look of the generated lesson.
-                </p>
+        {/* Step 2: options */}
+        <section className="card p-5 sm:p-6" aria-labelledby="options-heading">
+          <StepHeading number={2} id="options-heading" title="Lesson options" />
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <fieldset>
+              <legend className="label">Length</legend>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {durations.map((item) => (
+                  <label
+                    key={item.value}
+                    className="option px-2 py-2 text-center"
+                    title={item.description}
+                  >
+                    <input
+                      type="radio"
+                      name="duration"
+                      value={item.value}
+                      checked={duration === item.value}
+                      onChange={() => setDuration(item.value)}
+                      className="sr-only"
+                    />
+                    <span className="block text-sm font-medium text-slate-900">
+                      {item.label}
+                    </span>
+                    <span className="block text-[11px] text-slate-500">
+                      {item.description}
+                    </span>
+                  </label>
+                ))}
               </div>
-            </div>
+            </fieldset>
 
-            <fieldset className="mt-5">
+            <div>
+              <label htmlFor="language" className="label">
+                Language
+              </label>
+              <div className="relative mt-2">
+                <select
+                  id="language"
+                  value={language}
+                  onChange={(event) => setLanguage(event.target.value)}
+                  className="input appearance-none pr-9"
+                >
+                  {languages.map((item) => {
+                    const unavailable =
+                      slideLanguages !== null &&
+                      !slideLanguages.includes(item);
+
+                    return (
+                      <option key={item} value={item} disabled={unavailable}>
+                        {unavailable ? `${item} (not available)` : item}
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              </div>
+              <p className="hint mt-1.5">Narration and on-screen text.</p>
+            </div>
+          </div>
+
+          <details className="disclosure mt-5 border-t border-slate-200 pt-4">
+            <summary className="text-sm">
+              <span className="text-slate-700">
+                More options
+                <span className="ml-2 text-xs text-slate-500">
+                  {levelLabel} · {styleLabel} slides
+                </span>
+              </span>
+              <ChevronDownIcon className="disclosure-chevron h-4 w-4 text-slate-400 transition-transform" />
+            </summary>
+
+            <fieldset className="mt-4">
               <legend className="label">Learning level</legend>
-              <p className="hint mt-1">
+              <p className="hint mt-0.5">
                 Controls vocabulary and how much background the lesson assumes.
               </p>
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
                 {learningLevels.map((item) => (
-                  <label
-                    key={item.value}
-                    className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/70 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2"
-                  >
+                  <label key={item.value} className="option p-3">
                     <input
                       type="radio"
                       name="learning-level"
@@ -657,10 +616,10 @@ export function CreateVideoForm() {
                       onChange={() => setLevel(item.value)}
                       className="sr-only"
                     />
-                    <span className="block text-sm font-semibold text-slate-900">
+                    <span className="block text-sm font-medium text-slate-900">
                       {item.label}
                     </span>
-                    <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
+                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">
                       {item.description}
                     </span>
                   </label>
@@ -668,325 +627,173 @@ export function CreateVideoForm() {
               </div>
             </fieldset>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="language" className="label">
-                  Language
-                </label>
-                <p className="hint mt-1">Narration and on-screen text.</p>
-                <div className="relative mt-2">
-                  <select
-                    id="language"
-                    value={language}
-                    onChange={(event) => setLanguage(event.target.value)}
-                    className="input appearance-none pr-9"
-                  >
-                    {languages.map((item) => {
-                      const unavailable =
-                        slideLanguages !== null &&
-                        !slideLanguages.includes(item);
-
-                      return (
-                        <option key={item} value={item} disabled={unavailable}>
-                          {unavailable ? `${item} (not available)` : item}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                </div>
-              </div>
-
-              <fieldset>
-                <legend className="label">Video duration</legend>
-                <p className="hint mt-1">Target length of the final MP4.</p>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  {durations.map((item) => (
-                    <label
-                      key={item.value}
-                      className="cursor-pointer rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-center transition-colors hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/70 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2"
-                    >
-                      <input
-                        type="radio"
-                        name="duration"
-                        value={item.value}
-                        checked={duration === item.value}
-                        onChange={() => setDuration(item.value)}
-                        className="sr-only"
-                      />
-                      <span className="block text-sm font-semibold text-slate-900">
-                        {item.label}
-                      </span>
-                      <span className="mt-0.5 block text-[10px] text-slate-500">
-                        {item.description}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            </div>
-
-            <fieldset className="mt-5">
-              <legend className="label">Video style</legend>
-              <p className="hint mt-1">
-                Choose the visual direction for the generated slides.
-              </p>
+            <fieldset className="mt-4">
+              <legend className="label">Slide style</legend>
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                {styles.map((item) => {
-                  const Icon = item.icon;
-
-                  return (
-                    <label
-                      key={item.value}
-                      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/70 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2"
-                    >
-                      <input
-                        type="radio"
-                        name="video-style"
-                        value={item.value}
-                        checked={style === item.value}
-                        onChange={() => setStyle(item.value)}
-                        className="sr-only"
-                      />
-                      <span className="flex items-center gap-2">
-                        <Icon className="h-4 w-4 text-indigo-600" />
-                        <span className="text-sm font-semibold text-slate-900">
-                          {item.label}
-                        </span>
-                      </span>
-                      <span className="mt-1 block text-[11px] leading-relaxed text-slate-500">
-                        {item.description}
-                      </span>
-                    </label>
-                  );
-                })}
+                {styles.map((item) => (
+                  <label key={item.value} className="option p-3">
+                    <input
+                      type="radio"
+                      name="video-style"
+                      value={item.value}
+                      checked={style === item.value}
+                      onChange={() => setStyle(item.value)}
+                      className="sr-only"
+                    />
+                    <span className="block text-sm font-medium text-slate-900">
+                      {item.label}
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">
+                      {item.description}
+                    </span>
+                  </label>
+                ))}
               </div>
             </fieldset>
-          </section>
+          </details>
+        </section>
 
-          <section className="card p-5 sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Step 3: generate */}
+        <section className="card p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-600">
+              {file
+                ? `${durationLabel} ${language} lesson from ${file.name}.`
+                : "Add a PDF to generate a video."}
+            </p>
+            <button type="submit" disabled={busy} className="btn-primary shrink-0">
+              {busy ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                  {status === "starting"
+                    ? "Starting video…"
+                    : progress === 100
+                      ? "Extracting text…"
+                      : `Uploading ${progress}%`}
+                </>
+              ) : (
+                "Generate video"
+              )}
+            </button>
+          </div>
+
+          {feedback ? (
+            <div
+              role={feedback.tone === "error" ? "alert" : "status"}
+              aria-live="polite"
+              className={`mt-4 flex items-start gap-3 rounded-md border p-3.5 ${feedbackStyles[feedback.tone].container}`}
+            >
+              {feedback.tone === "success" ? (
+                <CheckCircleIcon
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${feedbackStyles[feedback.tone].icon}`}
+                />
+              ) : (
+                <AlertTriangleIcon
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${feedbackStyles[feedback.tone].icon}`}
+                />
+              )}
               <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  Ready to build your lesson?
+                <p
+                  className={`text-sm font-medium ${feedbackStyles[feedback.tone].title}`}
+                >
+                  {feedback.title}
                 </p>
-                <p className="hint mt-0.5">
-                  {file
-                    ? "Your PDF goes to the local FastAPI backend, which writes the script, records narration, renders slides, and builds the MP4. One video is generated at a time."
-                    : "Note-only lessons are not supported yet. Upload a PDF to generate a video."}
+                <p
+                  className={`mt-0.5 text-sm leading-relaxed ${feedbackStyles[feedback.tone].message}`}
+                >
+                  {feedback.message}
                 </p>
               </div>
-              <button
-                type="submit"
-                disabled={busy}
-                className="btn-primary shrink-0"
-              >
-                {busy ? (
-                  <>
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                    {status === "starting"
-                      ? "Starting video..."
-                      : progress === 100
-                        ? "Extracting text..."
-                        : `Uploading ${progress}%`}
-                  </>
-                ) : (
-                  <>
-                    <SparklesIcon className="h-4 w-4" />
-                    {file ? "Generate Video" : "Generate Lesson"}
-                  </>
-                )}
-              </button>
             </div>
+          ) : null}
+        </section>
+      </div>
 
-            {feedback ? (
-              <div
-                role={feedback.tone === "error" ? "alert" : "status"}
-                aria-live="polite"
-                className={`mt-4 flex items-start gap-3 rounded-xl border p-3.5 ${feedbackStyles[feedback.tone].container}`}
-              >
-                {feedback.tone === "success" ? (
-                  <CheckCircleIcon
-                    className={`mt-0.5 h-4 w-4 shrink-0 ${feedbackStyles[feedback.tone].icon}`}
-                  />
-                ) : (
-                  <AlertTriangleIcon
-                    className={`mt-0.5 h-4 w-4 shrink-0 ${feedbackStyles[feedback.tone].icon}`}
-                  />
-                )}
-                <div>
-                  <p
-                    className={`text-sm font-semibold ${feedbackStyles[feedback.tone].title}`}
-                  >
-                    {feedback.title}
-                  </p>
-                  <p
-                    className={`mt-0.5 text-xs leading-relaxed ${feedbackStyles[feedback.tone].message}`}
-                  >
-                    {feedback.message}
-                  </p>
-                </div>
-              </div>
-            ) : null}
-          </section>
-        </div>
-
-        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          <section className="card p-5">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Lesson at a glance
-            </h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-500">Source</dt>
+      <aside className="space-y-4 lg:sticky lg:top-8 lg:self-start">
+        <section className="card p-5">
+          <h2 className="section-title">Summary</h2>
+          <dl className="mt-3 space-y-2 text-sm">
+            {[
+              ["Source", sourceLabel],
+              ["Length", durationLabel],
+              ["Language", language],
+              ["Level", levelLabel],
+              ["Style", styleLabel],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-start justify-between gap-3">
+                <dt className="text-slate-500">{label}</dt>
                 <dd
                   className="max-w-[60%] truncate text-right font-medium text-slate-900"
-                  title={sourceLabel}
+                  title={value}
                 >
-                  {sourceLabel}
+                  {value}
                 </dd>
               </div>
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-500">Level</dt>
-                <dd className="text-right font-medium text-slate-900">
-                  {levelLabel}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-500">Language</dt>
-                <dd className="text-right font-medium text-slate-900">
-                  {language}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-500">Duration</dt>
-                <dd className="text-right font-medium text-slate-900">
-                  {durationLabel}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-500">Style</dt>
-                <dd className="text-right font-medium text-slate-900">
-                  {styleLabel}
-                </dd>
-              </div>
-            </dl>
-          </section>
+            ))}
+          </dl>
+        </section>
 
-          <section className="card p-5">
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                <InfoIcon className="h-4 w-4" />
-              </span>
-              <h2 className="text-sm font-semibold text-slate-900">
-                Pipeline connected
-              </h2>
-            </div>
-            <p className="mt-2 text-xs leading-relaxed text-slate-500">
-              PDF extraction, Gemini lesson scripts, Murf TTS narration,
-              Pillow slides, and FFmpeg rendering run on the local FastAPI
-              service. A 5-minute video takes about a minute to generate.
-            </p>
-            <Link
-              href="/settings"
-              className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-500"
-            >
-              View configuration status
-              <ArrowRightIcon className="h-3.5 w-3.5" />
-            </Link>
-          </section>
-        </aside>
-      </form>
-
-      <section className="card p-5 sm:p-6">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-slate-900">
-              How your material becomes a video
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Every step is handled by the backend pipeline.
-            </p>
-          </div>
-          <span className="badge bg-slate-100 text-slate-500">Preview</span>
-        </div>
-
-        <div className="mt-6 grid gap-3 md:grid-cols-5">
-          {pipeline.map((step, index) => {
-            const Icon = step.icon;
-
-            return (
-              <div
-                key={step.title}
-                className="relative rounded-xl border border-slate-200 bg-slate-50/60 p-3.5"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                    0{index + 1}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs font-semibold text-slate-900">
-                  {step.title}
-                </p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
-                  {step.description}
-                </p>
-                {index < pipeline.length - 1 ? (
-                  <ArrowRightIcon className="absolute -right-3.5 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-slate-300 md:block" />
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-          <div className="relative aspect-video overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-950 p-5 text-white">
-            <div className="absolute -right-12 -top-16 h-40 w-40 rounded-full bg-white/10" />
-            <div className="absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-white/10" />
-            <div className="relative flex h-full flex-col justify-between">
-              <span className="badge w-fit bg-white/15 text-white ring-1 ring-inset ring-white/20">
-                Lesson preview
-              </span>
-              <div>
-                <p className="text-xs font-medium text-indigo-200">
-                  {levelLabel} · {language} · {durationLabel}
-                </p>
-                <p className="mt-1 text-lg font-semibold leading-snug">
-                  Your narrated lesson opens in the player
-                </p>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="h-1.5 w-2/3 rounded-full bg-white/20">
-                  <div className="h-1.5 w-1/3 rounded-full bg-gradient-to-r from-indigo-400 to-violet-400" />
-                </div>
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 ring-1 ring-inset ring-white/20">
-                  <PlayIcon className="ml-0.5 h-4 w-4" />
+        <section className="px-1">
+          <h2 className="text-xs font-medium text-slate-500">
+            What happens next
+          </h2>
+          <ol className="mt-2 space-y-1.5">
+            {pipelineSteps.map((step, index) => (
+              <li key={step} className="flex gap-2 text-xs leading-relaxed text-slate-500">
+                <span className="w-3 shrink-0 tabular-nums text-slate-400">
+                  {index + 1}
                 </span>
-              </div>
-            </div>
-          </div>
+                {step}
+              </li>
+            ))}
+          </ol>
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">
+            One video is generated at a time.{" "}
+            <Link href="/settings" className="text-brand-600 hover:underline">
+              Check service status
+            </Link>
+          </p>
+        </section>
+      </aside>
+    </form>
+  );
+}
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
-            <h3 className="text-sm font-semibold text-slate-900">
-              What you get
-            </h3>
-            <ul className="mt-3 space-y-2">
-              {deliverables.map((item) => (
-                <li
-                  key={item}
-                  className="flex items-start gap-2 text-xs leading-relaxed text-slate-600"
-                >
-                  <CheckCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
+function StepHeading({
+  number,
+  id,
+  title,
+  children,
+}: {
+  number: number;
+  id: string;
+  title: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-medium tabular-nums text-white">
+        {number}
+      </span>
+      <div>
+        <h2 id={id} className="section-title">
+          {title}
+        </h2>
+        {children ? <p className="hint mt-0.5">{children}</p> : null}
+      </div>
     </div>
+  );
+}
+
+function FieldError({ id, children }: { id?: string; children: ReactNode }) {
+  return (
+    <p
+      id={id}
+      role="alert"
+      className="mt-2 flex items-center gap-1.5 text-xs font-medium text-rose-700"
+    >
+      <AlertTriangleIcon className="h-3.5 w-3.5 shrink-0" />
+      {children}
+    </p>
   );
 }

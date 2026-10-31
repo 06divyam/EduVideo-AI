@@ -10,7 +10,6 @@ export default function QuizResultsPage({ params }: PageProps<"/quiz/[quizId]/re
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Exam results"
         title="Review your attempt"
         description="See your score, explanations for every question, and the topics that need more practice."
         action={
@@ -37,7 +36,7 @@ function LoadingCard() {
   return (
     <section className="card p-8">
       <div className="flex items-center gap-3 text-sm text-slate-500">
-        <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
         Loading your results…
       </div>
     </section>

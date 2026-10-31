@@ -123,151 +123,143 @@ export default function SettingsPage() {
     },
   ] as const;
 
+  const missingKeys = [
+    !pending && !unreachable && !geminiReady ? "GEMINI_API_KEY" : null,
+    !pending && !unreachable && !ttsReady
+      ? health?.tts_provider === "gemini"
+        ? "GEMINI_API_KEY"
+        : "MURF_API_KEY"
+      : null,
+  ].filter((key, index, all): key is string => key !== null && all.indexOf(key) === index);
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Settings"
-        title="Workspace settings"
-        description="Review application details, AI provider status, and the defaults used when creating new lessons."
+        title="Settings"
+        description="Service status, lesson defaults, and backend configuration."
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-6">
-          <SettingsForm />
-
-          <section className="card p-5 sm:p-6">
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-100">
-                <AlertTriangleIcon className="h-5 w-5" />
+          <section className="card overflow-hidden" aria-labelledby="status-heading">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3.5">
+              <h2 id="status-heading" className="section-title">
+                Service status
+              </h2>
+              <span className="text-xs text-slate-500">
+                {pending ? "Checking…" : unreachable ? "Backend unreachable" : "Live from /health"}
               </span>
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">
-                  API configuration
-                </h2>
-                <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                  Secrets belong in the backend environment, never in the
-                  browser.
-                </p>
-              </div>
             </div>
-
-            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm font-semibold text-amber-900">
-                Gemini API key is not configured
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-amber-800">
-                Add <code className="font-mono">GEMINI_API_KEY</code> to the
-                backend environment before generating lessons. A missing key
-                must surface a clear error instead of fallback content.
-              </p>
-            </div>
-
-            <div className="mt-4 overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-300">
-              <p className="text-slate-500"># backend/.env</p>
-              <p>GEMINI_API_KEY=your_key_here</p>
-            </div>
-
-            <div className="mt-4 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
-              <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-              <p className="text-xs leading-relaxed text-slate-500">
-                The frontend cannot read or verify backend secrets. Provider
-                checks are static placeholders; the FastAPI service is connected
-                for PDF extraction only.
-              </p>
-            </div>
-          </section>
-        </div>
-
-        <aside className="space-y-6">
-          <section className="card p-5">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Application information
-            </h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-500">Product</dt>
-                <dd className="text-right font-medium text-slate-900">
-                  EduVideo AI
-                </dd>
-              </div>
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-500">Tagline</dt>
-                <dd className="text-right font-medium text-slate-900">
-                  Turn your notes into knowledge.
-                </dd>
-              </div>
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-500">Version</dt>
-                <dd className="text-right font-medium text-slate-900">0.1.0</dd>
-              </div>
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-500">Build phase</dt>
-                <dd className="text-right">
-                  <span className="badge bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/15">
-                    Phase 2 · PDF extraction
-                  </span>
-                </dd>
-              </div>
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-500">Theme</dt>
-                <dd className="text-right font-medium text-slate-900">
-                  Education only
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          <section className="card p-5">
-            <h2 className="text-sm font-semibold text-slate-900">
-              AI provider status
-            </h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Static summary; only PDF extraction is live.
-            </p>
-            <ul className="mt-4 space-y-2">
+            <ul className="divide-y divide-slate-200">
               {providers.map((provider) => {
                 const Icon = provider.icon;
                 const tone = toneStyles[provider.tone];
 
                 return (
-                  <li
-                    key={provider.name}
-                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3"
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-inset ring-slate-200">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-slate-900">
-                        {provider.name}
-                      </p>
-                      <p className={`text-[11px] ${tone.text}`}>
-                        {provider.detail}
-                      </p>
-                    </div>
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${tone.dot}`}
-                      aria-hidden="true"
-                    />
+                  <li key={provider.name} className="flex items-center gap-3 px-5 py-3">
+                    <Icon className="h-4 w-4 shrink-0 text-slate-400" />
+                    <p className="min-w-0 flex-1 text-sm text-slate-900">
+                      {provider.name}
+                    </p>
+                    <p className={`flex items-center gap-2 text-xs ${tone.text}`}>
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dot}`}
+                        aria-hidden="true"
+                      />
+                      {provider.detail}
+                    </p>
                   </li>
                 );
               })}
             </ul>
-            <p className="mt-4 text-[11px] leading-relaxed text-slate-400">
-              {ffmpegReady ? (
-                <>
-                  Video rendering is enabled. Slide languages:{" "}
-                  {health?.slide_languages.join(", ")}.
-                </>
-              ) : (
-                <>
-                  Install FFmpeg with{" "}
-                  <code className="font-mono">brew install ffmpeg</code> to
-                  enable video rendering.
-                </>
-              )}
-            </p>
+            {unreachable ? (
+              <p className="border-t border-slate-200 bg-rose-50 px-5 py-3 text-xs leading-relaxed text-rose-800">
+                Start the backend with{" "}
+                <code className="font-mono">
+                  cd backend &amp;&amp; .venv/bin/uvicorn main:app --reload --port 8000
+                </code>
+              </p>
+            ) : ffmpegReady ? (
+              <p className="border-t border-slate-200 px-5 py-3 text-xs text-slate-500">
+                Slide languages: {health?.slide_languages.join(", ")}
+              </p>
+            ) : !pending ? (
+              <p className="border-t border-slate-200 bg-amber-50 px-5 py-3 text-xs text-amber-800">
+                Install FFmpeg with <code className="font-mono">brew install ffmpeg</code>{" "}
+                to enable video rendering.
+              </p>
+            ) : null}
           </section>
+
+          <SettingsForm />
+
+          <section className="card p-5 sm:p-6" aria-labelledby="config-heading">
+            <h2 id="config-heading" className="section-title">
+              Backend configuration
+            </h2>
+            <p className="hint mt-0.5">
+              API keys live in <code className="font-mono">backend/.env</code>{" "}
+              and are never sent to the browser.
+            </p>
+
+            {missingKeys.length > 0 ? (
+              <div
+                role="alert"
+                className="mt-4 flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 p-3.5"
+              >
+                <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <p className="text-sm text-amber-900">
+                  Missing {missingKeys.join(" and ")}. Add{" "}
+                  {missingKeys.length > 1 ? "them" : "it"} to the backend
+                  environment and restart the server.
+                </p>
+              </div>
+            ) : null}
+
+            <pre className="mt-4 overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-3.5 font-mono text-xs leading-relaxed text-slate-700">
+              <span className="text-slate-400"># backend/.env</span>
+              {"\nGEMINI_API_KEY=…        # lesson scripts"}
+              {"\nTTS_PROVIDER=murf       # murf or gemini"}
+              {"\nMURF_API_KEY=…"}
+              {"\nMURF_VOICE_ID=en-US-natalie"}
+            </pre>
+          </section>
+        </div>
+
+        <aside className="space-y-6">
+          <section className="card p-5">
+            <h2 className="section-title">About</h2>
+            <dl className="mt-3 space-y-2.5 text-sm">
+              {[
+                ["Product", "EduVideo AI"],
+                ["Version", "0.1.0"],
+                ["Lesson scripts", health?.gemini_model ?? "—"],
+                [
+                  "Narration",
+                  health
+                    ? `${health.tts_provider === "murf" ? "Murf" : "Gemini"} · ${health.tts_model}`
+                    : "—",
+                ],
+                ["Scope", "Education only"],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-3">
+                  <dt className="text-slate-500">{label}</dt>
+                  <dd className="truncate text-right font-medium text-slate-900" title={value}>
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-slate-500">
+            <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Status is read from the backend&apos;s{" "}
+              <code className="font-mono">/health</code> endpoint each time
+              this page loads.
+            </span>
+          </p>
         </aside>
       </div>
     </div>

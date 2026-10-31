@@ -18,17 +18,17 @@ export function EmptyState({
   return (
     <div
       className={`flex flex-col items-center text-center ${
-        compact ? "px-6 py-12" : "px-6 py-20"
+        compact ? "px-6 py-10" : "px-6 py-14"
       }`}
     >
-      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 ring-1 ring-inset ring-slate-200/70">
-        <Icon className="h-6 w-6" />
+      <span className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-400">
+        <Icon className="h-5 w-5" />
       </span>
-      <h3 className="mt-4 text-sm font-semibold text-slate-900">{title}</h3>
+      <h3 className="mt-3 text-sm font-semibold text-slate-900">{title}</h3>
       <p className="mt-1 max-w-sm text-sm leading-relaxed text-slate-500">
         {description}
       </p>
-      {action ? <div className="mt-5">{action}</div> : null}
+      {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
 }

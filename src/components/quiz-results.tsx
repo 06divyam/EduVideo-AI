@@ -63,7 +63,7 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
     return (
       <section className="card p-8">
         <div className="flex items-center gap-3 text-sm text-slate-500">
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
           Loading your results…
         </div>
       </section>
@@ -73,7 +73,7 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
   if (state === "error" || !attempt) {
     return (
       <section className="card p-6">
-        <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
+        <div className="flex items-start gap-3 rounded-md border border-rose-200 bg-rose-50 p-4">
           <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
           <div>
             <p className="text-sm font-semibold text-rose-900">
@@ -100,21 +100,21 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
     <div className="space-y-6">
       <section className="card overflow-hidden">
         <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
-          <div className="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-6 text-center text-white">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-100">
+          <div className="flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 p-6 text-center">
+            <p className="text-xs font-medium text-slate-500">
               Exam score
             </p>
-            <p className="mt-1 text-5xl font-bold tracking-tight">
+            <p className="mt-1 text-4xl font-semibold tabular-nums tracking-tight text-slate-900">
               {attempt.percentage}%
             </p>
-            <p className="mt-1 text-sm text-indigo-100">
+            <p className="mt-1 text-sm text-slate-500">
               {attempt.score} of {attempt.total} correct
             </p>
           </div>
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="badge bg-indigo-50 text-indigo-700">
+              <span className="badge bg-slate-100 text-slate-700">
                 {attempt.quiz_title}
               </span>
               <span className="badge bg-slate-100 text-slate-600">
@@ -122,7 +122,7 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
               </span>
             </div>
 
-            <h2 className="mt-3 text-xl font-semibold tracking-tight text-slate-900">
+            <h2 className="mt-3 text-lg font-semibold tracking-tight text-slate-900">
               {attempt.percentage >= 80
                 ? "Excellent work."
                 : attempt.percentage >= 60
@@ -138,16 +138,16 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
             </p>
 
             <dl className="mt-5 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 p-3">
+              <div className="rounded-md border border-slate-200 p-3">
                 <dt className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
-                  <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-500" />
+                  <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600" />
                   Correct
                 </dt>
                 <dd className="mt-0.5 text-lg font-semibold text-slate-900">
                   {correctCount}
                 </dd>
               </div>
-              <div className="rounded-xl border border-slate-200 p-3">
+              <div className="rounded-md border border-slate-200 p-3">
                 <dt className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
                   <XCircleIcon className="h-3.5 w-3.5 text-rose-500" />
                   Needs review
@@ -156,7 +156,7 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
                   {needsReview}
                 </dd>
               </div>
-              <div className="rounded-xl border border-slate-200 p-3">
+              <div className="rounded-md border border-slate-200 p-3">
                 <dt className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
                   <ClockIcon className="h-3.5 w-3.5 text-slate-400" />
                   Time used
@@ -189,7 +189,7 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
         <section className="space-y-4">
           <div className="flex items-end justify-between">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900">
                 Answer review
               </h2>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -213,7 +213,7 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
                 <span className="badge bg-slate-100 capitalize text-slate-600">
                   {question.difficulty}
                 </span>
-                <span className="badge bg-violet-50 text-violet-700">
+                <span className="badge bg-slate-100 text-slate-700">
                   {question.topic}
                 </span>
                 <span
@@ -247,7 +247,7 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
                   return (
                     <li
                       key={`${question.question_id}-${optionIndex}`}
-                      className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs leading-relaxed ${
+                      className={`flex items-start gap-2.5 rounded-md border p-3 text-xs leading-relaxed ${
                         isCorrect
                           ? "border-emerald-200 bg-emerald-50/70 text-emerald-900"
                           : isSelected
@@ -281,8 +281,8 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
                 })}
               </ul>
 
-              <div className="mt-3 rounded-xl bg-slate-50 p-3">
-                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              <div className="mt-3 rounded-md bg-slate-50 p-3">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                   <SparklesIcon className="h-3 w-3" />
                   Explanation
                 </p>
@@ -361,7 +361,7 @@ export function QuizResults({ attemptId }: { attemptId: string }) {
             </p>
             <Link
               href="/study"
-              className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-500"
+              className="link mt-3 text-xs"
             >
               Open study notes
               <ArrowRightIcon className="h-3.5 w-3.5" />

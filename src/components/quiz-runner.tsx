@@ -8,7 +8,6 @@ import {
   ArrowRightIcon,
   CheckCircleIcon,
   ClockIcon,
-  QuizIcon,
   SparklesIcon,
 } from "@/components/icons";
 import {
@@ -144,7 +143,7 @@ export function QuizRunner({ quizId }: { quizId: string }) {
     return (
       <section className="card p-8">
         <div className="flex items-center gap-3 text-sm text-slate-500">
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
           Loading exam…
         </div>
       </section>
@@ -154,7 +153,7 @@ export function QuizRunner({ quizId }: { quizId: string }) {
   if (state === "error" || !quiz) {
     return (
       <section className="card p-6">
-        <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
+        <div className="flex items-start gap-3 rounded-md border border-rose-200 bg-rose-50 p-4">
           <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
           <div>
             <p className="text-sm font-semibold text-rose-900">
@@ -184,11 +183,8 @@ export function QuizRunner({ quizId }: { quizId: string }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 ring-1 ring-inset ring-violet-100">
-                <QuizIcon className="h-4 w-4" />
-              </span>
               <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold text-slate-900">
+                <h1 className="truncate text-sm font-semibold text-slate-900">
                   {quiz.title}
                 </h1>
                 <p className="text-xs text-slate-500">
@@ -201,7 +197,7 @@ export function QuizRunner({ quizId }: { quizId: string }) {
 
           <div className="flex items-center gap-3">
             <span
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold ${
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold ${
                 remaining <= 60
                   ? "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200"
                   : "bg-slate-100 text-slate-700"
@@ -241,7 +237,7 @@ export function QuizRunner({ quizId }: { quizId: string }) {
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
+              className="h-1.5 rounded-full bg-brand-600 transition-[width]"
               style={{
                 width: `${(answeredCount / quiz.questions.length) * 100}%`,
               }}
@@ -253,13 +249,13 @@ export function QuizRunner({ quizId }: { quizId: string }) {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
         <section className="card p-5 sm:p-6">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="badge bg-indigo-50 text-indigo-700">
+            <span className="badge bg-slate-100 text-slate-700">
               Question {currentIndex + 1} of {quiz.questions.length}
             </span>
             <span className="badge bg-slate-100 capitalize text-slate-600">
               {question.difficulty}
             </span>
-            <span className="badge bg-violet-50 text-violet-700">
+            <span className="badge bg-slate-100 text-slate-700">
               {question.topic}
             </span>
           </div>
@@ -283,16 +279,16 @@ export function QuizRunner({ quizId }: { quizId: string }) {
                     }))
                   }
                   aria-pressed={selected}
-                  className={`flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+                  className={`flex w-full items-start gap-3 rounded-md border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                     selected
-                      ? "border-indigo-500 bg-indigo-50/80"
-                      : "border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50"
+                      ? "border-brand-500 bg-brand-50/80"
+                      : "border-slate-200 bg-white hover:border-brand-300 hover:bg-slate-50"
                   }`}
                 >
                   <span
                     className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${
                       selected
-                        ? "bg-indigo-600 text-white"
+                        ? "bg-brand-600 text-white"
                         : "bg-slate-100 text-slate-600"
                     }`}
                   >
@@ -306,7 +302,7 @@ export function QuizRunner({ quizId }: { quizId: string }) {
             })}
           </div>
 
-          <div className="mt-6 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+          <div className="mt-6 flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
             <button
               type="button"
               onClick={() => setCurrentIndex((index) => Math.max(0, index - 1))}
@@ -364,7 +360,7 @@ export function QuizRunner({ quizId }: { quizId: string }) {
                     aria-current={active ? "true" : undefined}
                     className={`flex h-8 items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
                       active
-                        ? "bg-indigo-600 text-white"
+                        ? "bg-brand-600 text-white"
                         : answered
                           ? "bg-emerald-100 text-emerald-700"
                           : "bg-slate-100 text-slate-500 hover:bg-slate-200"
@@ -388,7 +384,7 @@ export function QuizRunner({ quizId }: { quizId: string }) {
           </section>
 
           {unanswered > 0 ? (
-            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
               <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
               <p className="text-[11px] leading-relaxed text-amber-800">
                 {unanswered}{" "}
@@ -397,7 +393,7 @@ export function QuizRunner({ quizId }: { quizId: string }) {
               </p>
             </div>
           ) : (
-            <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+            <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3">
               <CheckCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
               <p className="text-[11px] leading-relaxed text-emerald-800">
                 All questions answered. Review your choices before submitting.
@@ -407,7 +403,7 @@ export function QuizRunner({ quizId }: { quizId: string }) {
 
           <section className="card p-4">
             <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-              <SparklesIcon className="h-3.5 w-3.5 text-indigo-500" />
+              <SparklesIcon className="h-3.5 w-3.5 text-slate-400" />
               Answers hidden
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
@@ -419,7 +415,7 @@ export function QuizRunner({ quizId }: { quizId: string }) {
           {submitError ? (
             <div
               role="alert"
-              className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3"
+              className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-3"
             >
               <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
               <p className="text-[11px] leading-relaxed text-rose-800">

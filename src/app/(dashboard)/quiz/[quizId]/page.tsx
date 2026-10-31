@@ -10,7 +10,6 @@ export default function QuizDetailPage({ params }: PageProps<"/quiz/[quizId]">) 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Exam mode"
         title="Timed quiz"
         description="Answer each question, keep an eye on the timer, and submit before time runs out."
         action={
@@ -37,7 +36,7 @@ function LoadingCard() {
   return (
     <section className="card p-8">
       <div className="flex items-center gap-3 text-sm text-slate-500">
-        <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
         Loading exam…
       </div>
     </section>

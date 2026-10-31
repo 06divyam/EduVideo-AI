@@ -1,0 +1,645 @@
+import logging
+import uuid
+from collections import defaultdict
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
+
+from config import (
+    EXTRACTED_DIR,
+    GEMINI_MODEL,
+    QUIZ_TIME_PER_QUESTION_SECONDS,
+    UPLOAD_DIR,
+    cors_origins,
+    ensure_directories,
+)
+from database import (
+    AttemptRecord,
+    DocumentRecord,
+    QuizRecord,
+    create_attempt,
+    create_document,
+    create_quiz,
+    create_study_notes,
+    get_attempt,
+    get_document,
+    get_latest_study_notes,
+    get_quiz,
+    init_db,
+    list_attempts,
+    list_documents_with_flags,
+    list_quizzes,
+    list_study_notes,
+    update_document_text,
+)
+from schemas import (
+    ActivityItem,
+    AttemptResult,
+    DocumentsResponse,
+    DocumentListItem,
+    ExtractTextRequest,
+    ExtractTextResponse,
+    HealthResponse,
+    ProgressResponse,
+    QuestionResult,
+    QuizGenerationRequest,
+    QuizListItem,
+    QuizPublic,
+    QuizQuestionPublic,
+    QuizzesResponse,
+    QuizSubmission,
+    StudyNotes,
+    StudyNotesResponse,
+    TopicPerformance,
+    UploadPdfResponse,
+    WeakTopic,
+)
+from services.gemini_service import (
+    GeminiServiceError,
+    generate_quiz,
+    generate_study_notes,
+    is_configured,
+)
+from services.pdf_service import (
+    PdfServiceError,
+    extract_text,
+    load_document_text,
+    save_upload,
+    validate_upload,
+    write_extracted_text,
+)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    ensure_directories()
+    init_db()
+    yield
+
+
+app = FastAPI(
+    title="EduVideo AI API",
+    version="0.2.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def http_error(exc: PdfServiceError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": exc.message},
+    )
+
+
+def gemini_http_error(exc: GeminiServiceError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": exc.message},
+    )
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def get_document_or_404(document_id: str) -> DocumentRecord:
+    record = get_document(document_id)
+
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "document_not_found",
+                "message": "No document matches that id. Upload the PDF again.",
+            },
+        )
+
+    return record
+
+
+def public_quiz(record: QuizRecord) -> QuizPublic:
+    return QuizPublic(
+        quiz_id=record.id,
+        document_id=record.document_id,
+        title=record.title,
+        questions=[
+            QuizQuestionPublic(
+                id=question["id"],
+                question=question["question"],
+                options=question["options"],
+                difficulty=question["difficulty"],
+                topic=question["topic"],
+            )
+            for question in record.questions
+        ],
+        time_limit_seconds=record.time_limit_seconds,
+        created_at=record.created_at,
+    )
+
+
+def aggregate_topics(answers: list[dict]) -> dict[str, dict]:
+    topics: dict[str, dict] = defaultdict(lambda: {"correct": 0, "total": 0})
+
+    for answer in answers:
+        topic = answer.get("topic") or "General"
+        topics[topic]["total"] += 1
+        if answer.get("is_correct"):
+            topics[topic]["correct"] += 1
+
+    return dict(topics)
+
+
+def topic_list(topics: dict[str, dict]) -> list[WeakTopic]:
+    results = [
+        WeakTopic(
+            topic=topic,
+            correct=stats["correct"],
+            total=stats["total"],
+            accuracy=round(stats["correct"] / stats["total"], 3)
+            if stats["total"]
+            else 0.0,
+        )
+        for topic, stats in topics.items()
+    ]
+    return sorted(results, key=lambda item: (item.accuracy, item.topic))
+
+
+def build_attempt_result(attempt: AttemptRecord) -> AttemptResult:
+    quiz = get_quiz(attempt.quiz_id)
+    topics = aggregate_topics(attempt.answers)
+
+    return AttemptResult(
+        attempt_id=attempt.id,
+        quiz_id=attempt.quiz_id,
+        quiz_title=attempt.quiz_title,
+        document_id=quiz.document_id if quiz else "",
+        score=attempt.score,
+        total=attempt.total,
+        percentage=attempt.percentage,
+        duration_seconds=attempt.duration_seconds,
+        weak_topics=[WeakTopic(**topic) for topic in attempt.weak_topics],
+        topic_performance=[
+            TopicPerformance(**topic.model_dump()) for topic in topic_list(topics)
+        ],
+        questions=[QuestionResult(**answer) for answer in attempt.answers],
+        completed_at=attempt.completed_at,
+    )
+
+
+@app.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    return HealthResponse(
+        status="ok",
+        service="eduvideo-api",
+        gemini_configured=is_configured(),
+        gemini_model=GEMINI_MODEL,
+    )
+
+
+@app.post("/api/upload-pdf", response_model=UploadPdfResponse)
+async def upload_pdf(file: UploadFile = File(...)) -> UploadPdfResponse:
+    try:
+        validate_upload(file.filename, file.content_type)
+    except PdfServiceError as exc:
+        await file.close()
+        raise http_error(exc) from exc
+
+    document_id = str(uuid.uuid4())
+    stored_path = UPLOAD_DIR / f"{document_id}.pdf"
+
+    try:
+        size_bytes = await save_upload(file, stored_path)
+        text, page_count = await run_in_threadpool(extract_text, stored_path)
+    except PdfServiceError as exc:
+        stored_path.unlink(missing_ok=True)
+        raise http_error(exc) from exc
+    finally:
+        await file.close()
+
+    extracted_path = EXTRACTED_DIR / f"{document_id}.txt"
+    created_at = now_iso()
+    record = DocumentRecord(
+        id=document_id,
+        filename=file.filename or "upload.pdf",
+        content_type=file.content_type or "application/pdf",
+        size_bytes=size_bytes,
+        page_count=page_count,
+        text_length=len(text),
+        created_at=created_at,
+        stored_path=str(stored_path),
+        extracted_path=str(extracted_path),
+    )
+
+    try:
+        await run_in_threadpool(write_extracted_text, text, extracted_path)
+        await run_in_threadpool(create_document, record)
+    except Exception as exc:
+        stored_path.unlink(missing_ok=True)
+        extracted_path.unlink(missing_ok=True)
+        logger.exception("Failed to persist uploaded document")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "storage_error",
+                "message": "The PDF could not be saved. Please try again.",
+            },
+        ) from exc
+
+    return UploadPdfResponse(
+        document_id=document_id,
+        filename=record.filename,
+        content_type=record.content_type,
+        size_bytes=size_bytes,
+        page_count=page_count,
+        text=text,
+        text_length=len(text),
+        created_at=created_at,
+    )
+
+
+@app.post("/api/extract-text", response_model=ExtractTextResponse)
+def extract_text_endpoint(payload: ExtractTextRequest) -> ExtractTextResponse:
+    record = get_document_or_404(payload.document_id)
+    stored_path = Path(record.stored_path)
+
+    try:
+        text, page_count = extract_text(stored_path)
+    except PdfServiceError as exc:
+        raise http_error(exc) from exc
+
+    extracted_path = Path(record.extracted_path)
+
+    try:
+        write_extracted_text(text, extracted_path)
+        update_document_text(record.id, page_count, len(text))
+    except Exception as exc:
+        logger.exception("Failed to refresh extracted text")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "storage_error",
+                "message": "The extracted text could not be saved. Please try again.",
+            },
+        ) from exc
+
+    return ExtractTextResponse(
+        document_id=record.id,
+        page_count=page_count,
+        text=text,
+        text_length=len(text),
+        created_at=record.created_at,
+    )
+
+
+@app.get("/api/documents", response_model=DocumentsResponse)
+def documents() -> DocumentsResponse:
+    rows = list_documents_with_flags()
+    return DocumentsResponse(
+        documents=[
+            DocumentListItem(
+                document_id=row["document_id"],
+                filename=row["filename"],
+                page_count=row["page_count"],
+                text_length=row["text_length"],
+                created_at=row["created_at"],
+                has_study_notes=bool(row["has_study_notes"]),
+                has_quiz=bool(row["has_quiz"]),
+            )
+            for row in rows
+        ]
+    )
+
+
+@app.post(
+    "/api/documents/{document_id}/study-notes",
+    response_model=StudyNotesResponse,
+)
+async def generate_document_study_notes(document_id: str) -> StudyNotesResponse:
+    record = get_document_or_404(document_id)
+
+    try:
+        text = await run_in_threadpool(
+            load_document_text,
+            Path(record.stored_path),
+            Path(record.extracted_path),
+        )
+        notes = await run_in_threadpool(
+            generate_study_notes, text, record.filename
+        )
+    except PdfServiceError as exc:
+        raise http_error(exc) from exc
+    except GeminiServiceError as exc:
+        raise gemini_http_error(exc) from exc
+
+    note_id = str(uuid.uuid4())
+    created_at = now_iso()
+    await run_in_threadpool(
+        create_study_notes,
+        note_id,
+        document_id,
+        notes.model_dump(),
+        created_at,
+    )
+
+    return StudyNotesResponse(
+        note_id=note_id,
+        document_id=document_id,
+        notes=notes,
+        created_at=created_at,
+    )
+
+
+@app.get(
+    "/api/documents/{document_id}/study-notes",
+    response_model=StudyNotesResponse,
+)
+def get_document_study_notes(document_id: str) -> StudyNotesResponse:
+    get_document_or_404(document_id)
+    record = get_latest_study_notes(document_id)
+
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "study_notes_not_found",
+                "message": "No study notes have been generated for this document yet.",
+            },
+        )
+
+    return StudyNotesResponse(
+        note_id=record.id,
+        document_id=record.document_id,
+        notes=StudyNotes(**record.notes),
+        created_at=record.created_at,
+    )
+
+
+@app.get("/api/quizzes", response_model=QuizzesResponse)
+def quizzes() -> QuizzesResponse:
+    return QuizzesResponse(
+        quizzes=[QuizListItem(**item) for item in list_quizzes()]
+    )
+
+
+@app.post("/api/quizzes", response_model=QuizPublic)
+async def generate_document_quiz(payload: QuizGenerationRequest) -> QuizPublic:
+    record = get_document_or_404(payload.document_id)
+
+    try:
+        text = await run_in_threadpool(
+            load_document_text,
+            Path(record.stored_path),
+            Path(record.extracted_path),
+        )
+        generated = await run_in_threadpool(
+            generate_quiz,
+            text,
+            record.filename,
+            payload.question_count,
+            payload.difficulty,
+        )
+    except PdfServiceError as exc:
+        raise http_error(exc) from exc
+    except GeminiServiceError as exc:
+        raise gemini_http_error(exc) from exc
+
+    created_at = now_iso()
+    questions = [
+        {"id": str(uuid.uuid4()), **question.model_dump()}
+        for question in generated.questions
+    ]
+    quiz = QuizRecord(
+        id=str(uuid.uuid4()),
+        document_id=payload.document_id,
+        title=generated.title,
+        questions=questions,
+        time_limit_seconds=payload.question_count
+        * QUIZ_TIME_PER_QUESTION_SECONDS,
+        created_at=created_at,
+    )
+
+    try:
+        await run_in_threadpool(create_quiz, quiz)
+    except Exception as exc:
+        logger.exception("Failed to save generated quiz")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "storage_error",
+                "message": "The quiz could not be saved. Please try again.",
+            },
+        ) from exc
+
+    return public_quiz(quiz)
+
+
+@app.get("/api/quizzes/{quiz_id}", response_model=QuizPublic)
+def quiz_detail(quiz_id: str) -> QuizPublic:
+    quiz = get_quiz(quiz_id)
+
+    if quiz is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "quiz_not_found",
+                "message": "No quiz matches that id.",
+            },
+        )
+
+    return public_quiz(quiz)
+
+
+@app.post("/api/quizzes/{quiz_id}/attempts", response_model=AttemptResult)
+def submit_quiz_attempt(quiz_id: str, payload: QuizSubmission) -> AttemptResult:
+    quiz = get_quiz(quiz_id)
+
+    if quiz is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "quiz_not_found",
+                "message": "No quiz matches that id.",
+            },
+        )
+
+    answer_map: dict[str, int] = {}
+    for answer in payload.answers:
+        if answer.question_id in answer_map:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "duplicate_answer",
+                    "message": "Each question can only be answered once.",
+                },
+            )
+        answer_map[answer.question_id] = answer.selected_index
+
+    valid_ids = {question["id"] for question in quiz.questions}
+    unknown = set(answer_map) - valid_ids
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "unknown_question",
+                "message": "One or more answers do not belong to this quiz.",
+            },
+        )
+
+    results = []
+    for question in quiz.questions:
+        selected = answer_map.get(question["id"])
+        results.append(
+            {
+                "question_id": question["id"],
+                "question": question["question"],
+                "options": question["options"],
+                "selected_index": selected,
+                "correct_index": question["answer_index"],
+                "is_correct": selected == question["answer_index"],
+                "explanation": question["explanation"],
+                "topic": question["topic"],
+                "difficulty": question["difficulty"],
+            }
+        )
+
+    score = sum(1 for result in results if result["is_correct"])
+    total = len(results)
+    percentage = round((score / total) * 100, 1) if total else 0.0
+    topics = aggregate_topics(results)
+    weak_topics = [
+        topic.model_dump()
+        for topic in topic_list(topics)
+        if topic.correct < topic.total
+    ][:5]
+    attempt = AttemptRecord(
+        id=str(uuid.uuid4()),
+        quiz_id=quiz_id,
+        quiz_title=quiz.title,
+        score=score,
+        total=total,
+        percentage=percentage,
+        duration_seconds=payload.duration_seconds,
+        answers=results,
+        weak_topics=weak_topics,
+        completed_at=now_iso(),
+    )
+
+    try:
+        create_attempt(attempt)
+    except Exception as exc:
+        logger.exception("Failed to save quiz attempt")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "storage_error",
+                "message": "The quiz result could not be saved. Please try again.",
+            },
+        ) from exc
+
+    return build_attempt_result(attempt)
+
+
+@app.get("/api/attempts/{attempt_id}", response_model=AttemptResult)
+def attempt_detail(attempt_id: str) -> AttemptResult:
+    attempt = get_attempt(attempt_id)
+
+    if attempt is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "attempt_not_found",
+                "message": "No quiz attempt matches that id.",
+            },
+        )
+
+    return build_attempt_result(attempt)
+
+
+@app.get("/api/progress", response_model=ProgressResponse)
+def progress() -> ProgressResponse:
+    documents_list = list_documents_with_flags()
+    notes = list_study_notes()
+    attempts = list_attempts()
+
+    all_answers = [
+        answer for attempt in attempts for answer in attempt.answers
+    ]
+    topics = aggregate_topics(all_answers)
+    weak_topics = [
+        topic for topic in topic_list(topics) if topic.correct < topic.total
+    ][:5]
+    average_score = (
+        round(sum(attempt.percentage for attempt in attempts) / len(attempts), 1)
+        if attempts
+        else 0.0
+    )
+
+    activity: list[ActivityItem] = []
+
+    for document in documents_list:
+        activity.append(
+            ActivityItem(
+                type="lesson_uploaded",
+                title=document["filename"],
+                detail=(
+                    f"{document['page_count']} pages · "
+                    f"{document['text_length']:,} characters extracted"
+                ),
+                created_at=document["created_at"],
+                href="/study",
+            )
+        )
+
+    for note in notes:
+        activity.append(
+            ActivityItem(
+                type="study_notes",
+                title=note.notes.get("title", "Study notes"),
+                detail="Smart study notes generated",
+                created_at=note.created_at,
+                href="/study",
+            )
+        )
+
+    for attempt in attempts:
+        activity.append(
+            ActivityItem(
+                type="quiz_completed",
+                title=attempt.quiz_title,
+                detail=(
+                    f"{attempt.score}/{attempt.total} correct · "
+                    f"{attempt.percentage:.1f}%"
+                ),
+                created_at=attempt.completed_at,
+                href=f"/quiz/{attempt.quiz_id}/results/{attempt.id}",
+            )
+        )
+
+    activity.sort(key=lambda item: item.created_at, reverse=True)
+
+    return ProgressResponse(
+        total_lessons=len(documents_list),
+        videos_generated=0,
+        quizzes_completed=len(attempts),
+        average_quiz_score=average_score,
+        weak_topics=weak_topics,
+        topic_performance=[
+            TopicPerformance(**topic.model_dump()) for topic in topic_list(topics)
+        ],
+        recent_activity=activity[:8],
+    )
